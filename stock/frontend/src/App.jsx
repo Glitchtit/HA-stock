@@ -5,6 +5,10 @@ import { HardwareScanInput } from './components/HardwareScanInput';
 import ShoppingAttributionModal from './components/ShoppingAttributionModal';
 import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
+import {
+  basketToApply, buyHintText, clearedToast, estimatedTotal as estimateShoppingTotal,
+  isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, stepTarget,
+} from './shoppingHints';
 
 // ---------------------------------------------------------------------------
 // Ingress-path awareness
@@ -338,13 +342,6 @@ function getKplUnitId() {
       });
   }
   return kplUnitIdPromise;
-}
-
-// Shopping rows measured in grams/millilitres are recipe requirements
-// ("3,5 dl"), not package counts: no ±1 stepper, no price estimate.
-function isRequirementRow(item) {
-  const dim = item?.display?.unit_dimension;
-  return dim === 'mass' || dim === 'volume';
 }
 
 // ---------------------------------------------------------------------------
@@ -1852,7 +1849,7 @@ function ShoppingListOverlay({
   onBundlePush,
   onClose,
   onToggleDone,
-  onUpdateAmount,
+  onStep,
   onDeleteItem,
   onClearDone,
   onAddByProduct,
@@ -2006,21 +2003,13 @@ function ShoppingListOverlay({
     return m;
   }, [products]);
 
-  // Estimated list total from Storage unit prices. Note rows and products
-  // without a stored unit_price contribute nothing — hence the "~" prefix.
-  const estimatedTotal = useMemo(() => {
-    let sum = 0;
-    for (const item of list || []) {
-      if (item.product_id == null) continue;
-      // Only rows counted in retail packages multiply by a package price.
-      const dim = item.display?.unit_dimension;
-      if (dim && dim !== 'package') continue;
-      const price = productById.get(item.product_id)?.unit_price;
-      if (price == null) continue;
-      sum += (parseFloat(item.amount) || 1) * price;
-    }
-    return sum;
-  }, [list, productById]);
+  // Estimated total of the open rows: packages to buy × the price of the
+  // product to buy (Storage's buy hint). Rows without a stored price add
+  // nothing — hence the "~" prefix.
+  const estimatedTotal = useMemo(
+    () => estimateShoppingTotal(list, productById),
+    [list, productById],
+  );
 
   // Sort + group the shopping list by Finnish aisle ------------------------
   const aisles = useMemo(() => {
@@ -2131,15 +2120,7 @@ function ShoppingListOverlay({
         const kept = [];
         for (const { item, product } of bucket.items) {
           const isNote = product?.name === NOTE_SENTINEL_NAME;
-          const row = {
-            name: isNote
-              ? (item.note || 'Muistilappu')
-              : (product?.name ?? item.ha_item_name ?? `#${item.product_id}`),
-            amount: parseFloat(item.amount ?? 1) || 1,
-            unit: isNote ? '' : (item.display?.unit_abbr || ''),
-            done: !!item.done,
-            note: isNote ? '' : (item.note || ''),
-          };
+          const row = printRow(item, product);
           if (!store) {
             kept.push(row);
             continue;
@@ -2281,7 +2262,7 @@ function ShoppingListOverlay({
                     bundleName={item.bundle_id != null ? bundleNameById.get(item.bundle_id) : null}
                     onToggleDone={onToggleDone}
                     onDeleteItem={onDeleteItem}
-                    onUpdateAmount={onUpdateAmount}
+                    onStep={onStep}
                     onSwapToChild={onSwapToChild}
                     onTogglePin={onTogglePin}
                   />
@@ -3307,7 +3288,7 @@ function ShoppingListRow({
   bundleName,
   onToggleDone,
   onDeleteItem,
-  onUpdateAmount,
+  onStep,
   onSwapToChild,
   onTogglePin,
 }) {
@@ -3322,18 +3303,17 @@ function ShoppingListRow({
   const availableStores = isNote ? [] : (product?.stores || []).filter((s) => s.available);
 
   const amount = parseFloat(item.amount ?? 1) || 1;
+  const hint = isNote || item.done ? '' : buyHintText(item);
 
+  // A requirement row ("3 dl") steps its package count and becomes packages;
+  // other rows step their amount (shoppingHints.stepTarget).
   const handleDec = (e) => {
     e.stopPropagation();
-    if (amount <= 1) {
-      onDeleteItem(item);
-    } else {
-      onUpdateAmount(item, amount - 1);
-    }
+    onStep(item, -1);
   };
   const handleInc = (e) => {
     e.stopPropagation();
-    onUpdateAmount(item, amount + 1);
+    onStep(item, +1);
   };
 
   return (
@@ -3396,33 +3376,27 @@ function ShoppingListRow({
           </div>
         </div>
 
-        {/* Amount: requirement rows ("3,5 dl") show their quantity; package
-            and piece rows keep the ±1 stepper. */}
-        {isRequirementRow(item) ? (
-          <span className="flex-shrink-0 text-sm text-white font-semibold px-2 whitespace-nowrap">
-            {item.display.qty_text}
+        {/* Amount with a ± stepper; on a requirement row ("3,5 dl") the
+            stepper counts packages of the product to buy. */}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={handleDec}
+            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+            aria-label={isRequirementRow(item) ? 'Yksi pakkaus vähemmän' : 'Vähennä'}
+          >
+            −
+          </button>
+          <span className="text-sm text-white font-semibold min-w-6 px-1 text-center whitespace-nowrap">
+            {item.display?.qty_text ?? (amount % 1 === 0 ? amount : amount.toFixed(1))}
           </span>
-        ) : (
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button
-              onClick={handleDec}
-              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-              aria-label="Vähennä"
-            >
-              −
-            </button>
-            <span className="text-sm text-white font-semibold min-w-6 px-1 text-center whitespace-nowrap">
-              {item.display?.qty_text ?? (amount % 1 === 0 ? amount : amount.toFixed(1))}
-            </span>
-            <button
-              onClick={handleInc}
-              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-              aria-label="Lisää"
-            >
-              +
-            </button>
-          </div>
-        )}
+          <button
+            onClick={handleInc}
+            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+            aria-label={isRequirementRow(item) ? 'Yksi pakkaus lisää' : 'Lisää'}
+          >
+            +
+          </button>
+        </div>
 
         {/* Pin to exact brand — pinned rows are excluded from cross-brand AI
             fulfillment (only this exact product ticks them off). */}
@@ -3454,6 +3428,13 @@ function ShoppingListRow({
         </button>
       </div>
 
+      {/* What to buy, on its own line so a phone shows the whole name */}
+      {hint && (
+        <p className="px-3 pb-2 -mt-1 text-xs text-gray-300 truncate" title={hint}>
+          🛒 {hint}
+        </p>
+      )}
+
       {/* Store chips on their own wrapping row on narrow screens */}
       {availableStores.length > 0 && (
         <div className="sm:hidden flex flex-wrap gap-1.5 px-3 pb-2 -mt-1">
@@ -3471,8 +3452,12 @@ function ShoppingListRow({
               <button
                 key={child.id}
                 onClick={() => onSwapToChild(item, child)}
-                className="flex-shrink-0 px-3 py-1 rounded-full bg-gray-700/70 hover:bg-brand-orange/80 text-xs font-medium text-gray-200 hover:text-white transition-colors"
-                title={`Vaihda: ${child.name}`}
+                className={`flex-shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  item.preferred_product_id === child.id
+                    ? 'bg-brand-orange/80 text-white'
+                    : 'bg-gray-700/70 hover:bg-brand-orange/80 text-gray-200 hover:text-white'
+                }`}
+                title={`Osta tämä: ${child.name}`}
               >
                 {child.name}
               </button>
@@ -4216,6 +4201,28 @@ export default function App() {
     [addToast],
   );
 
+  // ---- Shopping-list refresh after server-side changes ----------------------
+  // Purchases, a finished trip or a bundle push change rows on the server;
+  // re-read the list instead of guessing. Non-fatal: the poll catches up.
+  const refreshShoppingList = useCallback(async () => {
+    try {
+      const r = await axios.get(`${API_BASE}/shopping-list`);
+      if (Array.isArray(r.data)) setShoppingList(normalizeShoppingRows(r.data));
+    } catch {
+      // Non-fatal — the list refreshes on the next poll.
+    }
+  }, []);
+
+  // A purchase took rows off (or down) the list (`cleared_rows` from
+  // /stock/add or apply-basket): say which, and show the new list.
+  const noteClearedRows = useCallback((cleared) => {
+    if (!cleared?.length) return;
+    const names = new Map((allProducts || []).map((p) => [p.id, p.name]));
+    const text = clearedToast(cleared, names);
+    if (text) addToast(text, 'success');
+    refreshShoppingList();
+  }, [allProducts, addToast, refreshShoppingList]);
+
   // ---- Discover queue processor ---------------------------------------------
   // Processes queued unknown barcodes one at a time.  When a discover call
   // finishes (success or failure) the next item is picked up automatically.
@@ -4297,6 +4304,9 @@ export default function App() {
             { id: productId, name, picture_filename: null },
             recentsCount,
           );
+          // A new product clears nothing until it is placed under a generic
+          // item; finishing the trip applies it again (apply-basket).
+          shoppingBasketRef.current.push({ product_id: productId, amount: recentsCount, cleared: false });
         }
 
         // Fulfill any pending shopping-list adds for this barcode.
@@ -4438,13 +4448,16 @@ export default function App() {
         // Known product → add 1 to stock via Storage API
         try {
           const addedAmount = foundProduct.matched_pack_size ?? 1;
-          await axios.post(`${API_BASE}/stock/add`, {
+          const addResp = await axios.post(`${API_BASE}/stock/add`, {
             product_id: foundProduct.id,
             amount: addedAmount,
           });
-          // Record for the end-of-session cross-brand reconcile pass.
+          const cleared = addResp.data?.cleared_rows ?? [];
+          // Record for the end-of-trip pass (apply-basket, then AI reconcile).
           if (continuous) {
-            shoppingBasketRef.current.push({ product_id: foundProduct.id, amount: addedAmount });
+            shoppingBasketRef.current.push({
+              product_id: foundProduct.id, amount: addedAmount, cleared: cleared.length > 0,
+            });
           }
           const packLabel = (foundProduct.matched_pack_size ?? 1) > 1
             ? ` (+${foundProduct.matched_pack_size})`
@@ -4454,6 +4467,7 @@ export default function App() {
             'success',
           );
           if (continuous) pushRecent(setShoppingRecents, foundProduct);
+          noteClearedRows(cleared);
         } catch (err) {
           addToast(
             err?.response?.data?.detail ?? 'Failed to add stock for scanned barcode.',
@@ -4482,7 +4496,7 @@ export default function App() {
         await refreshStock();
       }
     },
-    [addToast, refreshStock, scraperAvailable, processDiscoverQueue, pushRecent],
+    [addToast, refreshStock, scraperAvailable, processDiscoverQueue, pushRecent, noteClearedRows],
   );
 
   // ---- Scanner close handler -----------------------------------------------
@@ -4498,19 +4512,26 @@ export default function App() {
         await refreshStock();
       }
       // After a shopping-mode session with at least one scan: surface the chores
-      // XP attribution prompt IMMEDIATELY so finish feels instant. The cross-brand
-      // reconcile AI call runs in the background and pops its own modal (stacked
-      // above attribution) only if it proposes matches — it must never delay the
-      // attribution prompt. Always drain the session basket so a cancelled session
-      // never bleeds bought items into the next one.
+      // XP attribution prompt IMMEDIATELY so finish feels instant. Finishing the
+      // trip runs in the background: scans that cleared nothing are applied
+      // again (apply-basket; the product may have been placed under a generic
+      // item since), and only what is still unmatched goes to the cross-brand
+      // AI reconcile, which pops its own modal (stacked above attribution) if
+      // it proposes matches. Always drain the session basket so a cancelled
+      // session never bleeds bought items into the next one.
       const basket = shoppingBasketRef.current.slice();
       shoppingBasketRef.current = [];
       if (scanned > 0) {
         setShoppingAttribution({ scanCount: scanned });
-        if (basket.length > 0) {
+        const pending = basketToApply(basket);
+        if (pending.length > 0) {
           axios
-            .post(`${API_BASE}/shopping-list/reconcile`, { basket })
-            .then((resp) => {
+            .post(`${API_BASE}/shopping-list/apply-basket`, { basket: pending })
+            .then((resp) => resp.data, () => ({ cleared_rows: [], unmatched: pending }))
+            .then(async ({ cleared_rows: cleared = [], unmatched = [] }) => {
+              noteClearedRows(cleared);
+              if (unmatched.length === 0) return;
+              const resp = await axios.post(`${API_BASE}/shopping-list/reconcile`, { basket: unmatched });
               const proposals = resp.data?.proposals;
               if (proposals?.length > 0) setShoppingReconcile({ proposals });
             })
@@ -4520,7 +4541,7 @@ export default function App() {
         }
       }
     },
-    [refreshStock, clearInactivityTimer],
+    [refreshStock, clearInactivityTimer, noteClearedRows],
   );
 
   // ---- Inventory scanner handlers ------------------------------------------
@@ -4826,11 +4847,16 @@ export default function App() {
       const amount = (recent.packSize ?? 1) * (delta > 0 ? 1 : -1);
       try {
         if (delta > 0) {
-          await axios.post(`${API_BASE}/stock/add`, {
+          const addResp = await axios.post(`${API_BASE}/stock/add`, {
             product_id: recent.id,
             amount: Math.abs(amount),
           });
+          const cleared = addResp.data?.cleared_rows ?? [];
+          shoppingBasketRef.current.push({
+            product_id: recent.id, amount: Math.abs(amount), cleared: cleared.length > 0,
+          });
           addToast(`+${Math.abs(amount)} ${recent.name}`, 'success');
+          noteClearedRows(cleared);
         } else {
           // Swiping a just-scanned recent down is correcting an over-scan, not
           // consuming stock. Reverse the purchase so history stays clean (no
@@ -4839,6 +4865,9 @@ export default function App() {
             product_id: recent.id,
             amount: Math.abs(amount),
           });
+          shoppingBasketRef.current = removeFromBasket(
+            shoppingBasketRef.current, recent.id, Math.abs(amount),
+          );
           addToast(`−${Math.abs(amount)} ${recent.name}`, 'success');
         }
         adjustRecentCount(setShoppingRecents, recent.id, delta);
@@ -4849,7 +4878,7 @@ export default function App() {
         );
       }
     },
-    [addToast, adjustRecentCount],
+    [addToast, adjustRecentCount, noteClearedRows],
   );
 
   const handleAdjustInventoryRecent = useCallback(
@@ -5352,34 +5381,6 @@ export default function App() {
     [addToast],
   );
 
-  const handleUpdateShoppingAmount = useCallback(
-    async (item, newAmount) => {
-      if (!item?.id || item.id < 0) return;
-      const safe = Math.max(0.1, parseFloat(newAmount) || 1);
-      pendingMutations.current++;
-      const prevAmount = item.amount;
-      setShoppingList((prev) =>
-        prev.map((row) => (row.id === item.id ? { ...row, amount: safe } : row)),
-      );
-      try {
-        await axios.put(`${API_BASE}/shopping-list/${item.id}`, { amount: safe });
-      } catch (err) {
-        setShoppingList((prev) =>
-          prev.map((row) =>
-            row.id === item.id ? { ...row, amount: prevAmount } : row,
-          ),
-        );
-        addToast(
-          err?.response?.data?.detail ?? 'Päivitys epäonnistui.',
-          'error',
-        );
-      } finally {
-        pendingMutations.current = Math.max(0, pendingMutations.current - 1);
-      }
-    },
-    [addToast],
-  );
-
   const handleDeleteShoppingItem = useCallback(
     async (item) => {
       if (!item?.id || item.id < 0) return;
@@ -5399,6 +5400,39 @@ export default function App() {
       }
     },
     [addToast],
+  );
+
+  // ± on a shopping row (shoppingHints.stepTarget): a requirement row
+  // becomes a package count, others step by one, and below one the row goes.
+  // The row Storage returns replaces the local one, so its text is current.
+  const handleStepShoppingItem = useCallback(
+    async (item, delta) => {
+      if (!item?.id || item.id < 0) return;
+      const step = stepTarget(item, delta);
+      if (step.remove) {
+        await handleDeleteShoppingItem(item);
+        return;
+      }
+      pendingMutations.current++;
+      const previous = item;
+      setShoppingList((prev) =>
+        prev.map((row) => (row.id === item.id ? { ...row, amount: step.body.amount } : row)),
+      );
+      try {
+        const resp = await axios.put(`${API_BASE}/shopping-list/${item.id}`, step.body);
+        const [updated] = normalizeShoppingRows([resp.data]);
+        setShoppingList((prev) => prev.map((row) => (row.id === item.id ? updated : row)));
+      } catch (err) {
+        setShoppingList((prev) => prev.map((row) => (row.id === item.id ? previous : row)));
+        addToast(
+          err?.response?.data?.detail ?? 'Päivitys epäonnistui.',
+          'error',
+        );
+      } finally {
+        pendingMutations.current = Math.max(0, pendingMutations.current - 1);
+      }
+    },
+    [addToast, handleDeleteShoppingItem],
   );
 
   const handleClearDoneShopping = useCallback(async () => {
@@ -5432,12 +5466,7 @@ export default function App() {
       const { added = 0, skipped = 0 } = resp.data || {};
       const listResp = await axios.get(`${API_BASE}/shopping-list`);
       if (Array.isArray(listResp.data)) {
-        setShoppingList(listResp.data.map((row) => ({
-          ...row,
-          amount: parseFloat(row.amount ?? 1),
-          done: !!row.done,
-          auto_added: !!row.auto_added,
-        })));
+        setShoppingList(normalizeShoppingRows(listResp.data));
       }
       addToast(
         skipped > 0
@@ -5452,59 +5481,22 @@ export default function App() {
     }
   }, [addToast]);
 
-  // Swap a parent-product row to one of its children. Backend doesn't allow
-  // changing product_id via PUT, so we delete + re-create as one optimistic
-  // operation.
+  // Choose what to buy for a row (POST /shopping-list/{id}/swap): a product
+  // under the row's generic item becomes its preferred product, so the
+  // requirement, recipe, set and note stay; Storage returns the row.
   const handleSwapToChild = useCallback(
     async (item, child) => {
-      if (!item?.id || !child?.id) return;
+      if (!item?.id || item.id < 0 || !child?.id) return;
       pendingMutations.current++;
-      const original = item;
-      const tempId = -Date.now();
-      const optimistic = {
-        ...item,
-        id: tempId,
-        product_id: child.id,
-        ha_item_name: child.name,
-      };
-      setShoppingList((prev) =>
-        prev.map((row) => (row.id === item.id ? optimistic : row)),
-      );
       try {
-        // A requirement ("3,5 dl") stays a requirement on the chosen product;
-        // natural pieces ("2 kpl" eggs) become one retail package of it.
-        const dim = item.display?.unit_dimension;
-        const keepRequirement = dim === 'mass' || dim === 'volume';
-        const [, createRes] = await Promise.all([
-          axios.delete(`${API_BASE}/shopping-list/${item.id}`),
-          axios.post(`${API_BASE}/shopping-list`, {
-            product_id: child.id,
-            amount: dim === 'count' ? 1 : (item.amount ?? 1),
-            unit_id: keepRequirement ? (item.unit_id ?? null) : null,
-            note: item.note ?? '',
-            recipe_id: item.recipe_id ?? null,
-          }),
-        ]);
-        const real = createRes.data;
-        const normalized = {
-          ...real,
-          amount: parseFloat(real.amount ?? 1),
-          done: !!real.done,
-        };
-        setShoppingList((prev) => {
-          // The re-create may have merged into an already-listed row for the
-          // child product — drop the temp row instead of duplicating it.
-          const withoutTemp = prev.filter((r) => r.id !== tempId);
-          return withoutTemp.some((r) => r.id === normalized.id)
-            ? withoutTemp.map((r) => (r.id === normalized.id ? normalized : r))
-            : prev.map((row) => (row.id === tempId ? normalized : row));
+        const resp = await axios.post(`${API_BASE}/shopping-list/${item.id}/swap`, {
+          product_id: child.id,
         });
+        const [updated] = normalizeShoppingRows([resp.data]);
+        setShoppingList((prev) => prev.map((row) => (row.id === item.id ? updated : row)));
         try { navigator.vibrate?.(30); } catch {}
-        addToast(`Vaihdettu: ${child.name}`, 'success');
+        addToast(`Ostetaan: ${child.name}`, 'success');
       } catch (err) {
-        setShoppingList((prev) =>
-          prev.map((row) => (row.id === tempId ? original : row)),
-        );
         addToast(
           err?.response?.data?.detail ?? 'Vaihto epäonnistui.',
           'error',
@@ -6586,7 +6578,7 @@ export default function App() {
           onBundlePush={handleBundlePush}
           onClose={() => setShowShoppingList(false)}
           onToggleDone={handleToggleShoppingDone}
-          onUpdateAmount={handleUpdateShoppingAmount}
+          onStep={handleStepShoppingItem}
           onDeleteItem={handleDeleteShoppingItem}
           onClearDone={handleClearDoneShopping}
           onAddByProduct={handleAddProductToShoppingList}
@@ -6647,12 +6639,7 @@ export default function App() {
           onToast={addToast}
           onDone={async () => {
             setShoppingReconcile(null);
-            try {
-              const r = await axios.get(`${API_BASE}/shopping-list`);
-              setShoppingList(r.data);
-            } catch {
-              // Non-fatal — list refreshes on next poll.
-            }
+            await refreshShoppingList();
           }}
         />
       )}

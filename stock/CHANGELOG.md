@@ -1,3 +1,13 @@
+## 2.13.0
+
+- Each shopping row says what to buy: under a generic item, the product you usually buy, and for a recipe amount ("3 dl") how many packages cover it (≈ when estimated). Requires HA-storage 0.27.0
+- The ± stepper works on recipe amounts too: it counts packages of the product to buy, and the row then shows that package count. The number shown is always the one Storage saved
+- Tapping a product chip under a row picks what to buy without losing the row's amount, recipe, set or note; the chosen chip is highlighted
+- The estimated total counts the packages to buy at the price of the product to buy, and leaves out rows already ticked
+- Scanning a product takes its rows and those of its generic item off the list at once, and says which
+- Finishing a trip first applies products that cleared nothing again (a new product may have been sorted under a generic item meanwhile); only what is still unmatched goes to the AI match. Newly discovered products and swipe +1 count as bought; a swipe −1 takes the product back out
+- Printing sends Storage's quantity text, so the paper list reads "3,5 dl Kerma"
+
 ## 2.12.1
 
 - Ready for HA-storage 0.26.0, where generic products (concepts such as "Maito") are visible: quick-add marks them "yleinen", a generic row on the list counts the stock held by the products under it, and the "usually bought" chips list only products you can buy
