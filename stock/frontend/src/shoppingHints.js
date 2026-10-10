@@ -107,8 +107,18 @@ export function removeFromBasket(basket, productId, amount) {
   return out;
 }
 
+function rowNames(rows, nameById) {
+  return [...new Set((rows || []).map((r) => nameById.get(r.product_id)).filter(Boolean))];
+}
+
 // Toast text for the rows a purchase took off (or down) the list.
 export function clearedToast(clearedRows, nameById) {
-  const names = [...new Set((clearedRows || []).map((r) => nameById.get(r.product_id)).filter(Boolean))];
+  const names = rowNames(clearedRows, nameById);
   return names.length ? `Ostoslistalta: ${names.join(', ')}` : '';
+}
+
+// Toast text for the rows an undone scan (swipe −1) put back on the list.
+export function restoredToast(restoredRows, nameById) {
+  const names = rowNames(restoredRows, nameById);
+  return names.length ? `Palautettu listalle: ${names.join(', ')}` : '';
 }

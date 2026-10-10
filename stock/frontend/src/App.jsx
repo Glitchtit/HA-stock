@@ -7,7 +7,7 @@ import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
 import {
   basketToApply, buyHintText, clearedToast, estimatedTotal as estimateShoppingTotal,
-  isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, stepTarget,
+  isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, restoredToast, stepTarget,
 } from './shoppingHints';
 
 // ---------------------------------------------------------------------------
@@ -4223,6 +4223,16 @@ export default function App() {
     refreshShoppingList();
   }, [allProducts, addToast, refreshShoppingList]);
 
+  // An undone scan (swipe −1) put rows back (`restored_rows` from
+  // /stock/correct-purchase): say which, and show the new list.
+  const noteRestoredRows = useCallback((restored) => {
+    if (!restored?.length) return;
+    const names = new Map((allProducts || []).map((p) => [p.id, p.name]));
+    const text = restoredToast(restored, names);
+    if (text) addToast(text, 'success');
+    refreshShoppingList();
+  }, [allProducts, addToast, refreshShoppingList]);
+
   // ---- Discover queue processor ---------------------------------------------
   // Processes queued unknown barcodes one at a time.  When a discover call
   // finishes (success or failure) the next item is picked up automatically.
@@ -4861,7 +4871,7 @@ export default function App() {
           // Swiping a just-scanned recent down is correcting an over-scan, not
           // consuming stock. Reverse the purchase so history stays clean (no
           // phantom consume event) — see /stock/correct-purchase.
-          await axios.post(`${API_BASE}/stock/correct-purchase`, {
+          const fixResp = await axios.post(`${API_BASE}/stock/correct-purchase`, {
             product_id: recent.id,
             amount: Math.abs(amount),
           });
@@ -4869,6 +4879,7 @@ export default function App() {
             shoppingBasketRef.current, recent.id, Math.abs(amount),
           );
           addToast(`−${Math.abs(amount)} ${recent.name}`, 'success');
+          noteRestoredRows(fixResp.data?.restored_rows ?? []);
         }
         adjustRecentCount(setShoppingRecents, recent.id, delta);
       } catch (err) {
@@ -4878,7 +4889,7 @@ export default function App() {
         );
       }
     },
-    [addToast, adjustRecentCount, noteClearedRows],
+    [addToast, adjustRecentCount, noteClearedRows, noteRestoredRows],
   );
 
   const handleAdjustInventoryRecent = useCallback(

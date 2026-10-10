@@ -1,3 +1,7 @@
+## 2.13.1
+
+- Undoing a mis-scan (swipe −1 in shopping mode) puts the rows that scan took off the list back, and says which. Requires HA-storage 0.27.1
+
 ## 2.13.0
 
 - Each shopping row says what to buy: under a generic item, the product you usually buy, and for a recipe amount ("3 dl") how many packages cover it (≈ when estimated). Requires HA-storage 0.27.0

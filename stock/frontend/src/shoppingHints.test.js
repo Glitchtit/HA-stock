@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   basketToApply, buyHintText, clearedToast, estimatedTotal, isRequirementRow,
-  normalizeShoppingRows, printRow, removeFromBasket, stepTarget,
+  normalizeShoppingRows, printRow, removeFromBasket, restoredToast, stepTarget,
 } from './shoppingHints.js';
 
 const display = (dim, extra = {}) => ({ qty_text: '1', unit_abbr: null, unit_dimension: dim, ...extra });
@@ -98,4 +98,11 @@ test('the toast names the rows a purchase took off the list', () => {
   assert.equal(clearedToast([{ id: 9, product_id: 1, removed: true, amount: 0 },
     { id: 8, product_id: 2, removed: false, amount: 1 }], names), 'Ostoslistalta: Maito, Kerma');
   assert.equal(clearedToast([], names), '');
+});
+
+test('the toast names the rows an undone scan put back on the list', () => {
+  const names = new Map([[1, 'Maito'], [2, 'Kerma']]);
+  assert.equal(restoredToast([{ id: 9, product_id: 1, amount: 1 }, { id: 8, product_id: 2, amount: 3 }], names),
+    'Palautettu listalle: Maito, Kerma');
+  assert.equal(restoredToast([], names), '');
 });
