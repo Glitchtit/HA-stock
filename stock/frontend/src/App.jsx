@@ -324,6 +324,29 @@ function fuzzyScore(query, name) {
 // real product. Created lazily on first use.
 const NOTE_SENTINEL_NAME = 'Muistilappu';
 
+// Storage's "kpl" unit id, looked up once. New retail products are counted
+// in kpl; unit id 1 is grams in a seeded Storage DB.
+let kplUnitIdPromise = null;
+function getKplUnitId() {
+  if (!kplUnitIdPromise) {
+    kplUnitIdPromise = axios
+      .get(`${API_BASE}/units`)
+      .then((r) => (r.data || []).find((u) => u.abbreviation === 'kpl')?.id ?? null)
+      .catch(() => {
+        kplUnitIdPromise = null;
+        return null;
+      });
+  }
+  return kplUnitIdPromise;
+}
+
+// Shopping rows measured in grams/millilitres are recipe requirements
+// ("3,5 dl"), not package counts: no ±1 stepper, no price estimate.
+function isRequirementRow(item) {
+  const dim = item?.display?.unit_dimension;
+  return dim === 'mass' || dim === 'volume';
+}
+
 // ---------------------------------------------------------------------------
 // ProductDetailOverlay
 // Full-screen overlay with product details and action buttons.
@@ -1988,6 +2011,9 @@ function ShoppingListOverlay({
     let sum = 0;
     for (const item of list || []) {
       if (item.product_id == null) continue;
+      // Only rows counted in retail packages multiply by a package price.
+      const dim = item.display?.unit_dimension;
+      if (dim && dim !== 'package') continue;
       const price = productById.get(item.product_id)?.unit_price;
       if (price == null) continue;
       sum += (parseFloat(item.amount) || 1) * price;
@@ -2109,6 +2135,7 @@ function ShoppingListOverlay({
               ? (item.note || 'Muistilappu')
               : (product?.name ?? item.ha_item_name ?? `#${item.product_id}`),
             amount: parseFloat(item.amount ?? 1) || 1,
+            unit: isNote ? '' : (item.display?.unit_abbr || ''),
             done: !!item.done,
             note: isNote ? '' : (item.note || ''),
           };
@@ -3359,26 +3386,33 @@ function ShoppingListRow({
           </div>
         </div>
 
-        {/* Amount stepper */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={handleDec}
-            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-            aria-label="Vähennä"
-          >
-            −
-          </button>
-          <span className="text-sm text-white font-semibold w-6 text-center">
-            {amount % 1 === 0 ? amount : amount.toFixed(1)}
+        {/* Amount: requirement rows ("3,5 dl") show their quantity; package
+            and piece rows keep the ±1 stepper. */}
+        {isRequirementRow(item) ? (
+          <span className="flex-shrink-0 text-sm text-white font-semibold px-2 whitespace-nowrap">
+            {item.display.qty_text}
           </span>
-          <button
-            onClick={handleInc}
-            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-            aria-label="Lisää"
-          >
-            +
-          </button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              onClick={handleDec}
+              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+              aria-label="Vähennä"
+            >
+              −
+            </button>
+            <span className="text-sm text-white font-semibold min-w-6 px-1 text-center whitespace-nowrap">
+              {item.display?.qty_text ?? (amount % 1 === 0 ? amount : amount.toFixed(1))}
+            </span>
+            <button
+              onClick={handleInc}
+              className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+              aria-label="Lisää"
+            >
+              +
+            </button>
+          </div>
+        )}
 
         {/* Pin to exact brand — pinned rows are excluded from cross-brand AI
             fulfillment (only this exact product ticks them off). */}
@@ -5170,7 +5204,7 @@ export default function App() {
           const newProd = await axios.post(`${API_BASE}/products`, {
             name,
             description: scraperProduct.description || '',
-            unit_id: 1,
+            unit_id: (await getKplUnitId()) ?? 1,
           });
           createdProduct = newProd.data;
           if (ean && createdProduct?.id) {
@@ -5217,7 +5251,7 @@ export default function App() {
     const resp = await axios.post(`${API_BASE}/products`, {
       name: NOTE_SENTINEL_NAME,
       description: 'Vapaa teksti ostoslistalla',
-      unit_id: 1,
+      unit_id: (await getKplUnitId()) ?? 1,
     });
     const id = resp.data?.id;
     if (id != null) noteSentinelIdRef.current = id;
@@ -5424,12 +5458,18 @@ export default function App() {
         prev.map((row) => (row.id === item.id ? optimistic : row)),
       );
       try {
+        // A requirement ("3,5 dl") stays a requirement on the chosen product;
+        // natural pieces ("2 kpl" eggs) become one retail package of it.
+        const dim = item.display?.unit_dimension;
+        const keepRequirement = dim === 'mass' || dim === 'volume';
         const [, createRes] = await Promise.all([
           axios.delete(`${API_BASE}/shopping-list/${item.id}`),
           axios.post(`${API_BASE}/shopping-list`, {
             product_id: child.id,
-            amount: item.amount ?? 1,
+            amount: dim === 'count' ? 1 : (item.amount ?? 1),
+            unit_id: keepRequirement ? (item.unit_id ?? null) : null,
             note: item.note ?? '',
+            recipe_id: item.recipe_id ?? null,
           }),
         ]);
         const real = createRes.data;
