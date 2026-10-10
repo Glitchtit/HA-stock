@@ -1979,6 +1979,7 @@ function ShoppingListOverlay({
   // Children index: parent_id → array of ALL descendant products (variant
   // subtrees included: Juusto → cheddar → SKU). Used by the "usually bought"
   // chip strip so a category list row offers SKUs nested under variants.
+  // Generic entries (concepts) are walked through but never offered as a chip.
   const childrenByParent = useMemo(() => {
     const direct = new Map();
     for (const p of products || []) {
@@ -1992,7 +1993,7 @@ function ShoppingListOverlay({
       for (const c of direct.get(id) ?? []) {
         if (seen.has(c.id)) continue;
         seen.add(c.id);
-        out.push(c);
+        if (c.kind !== 'concept') out.push(c);
         collect(c.id, out, seen);
       }
     };
@@ -2272,7 +2273,9 @@ function ShoppingListOverlay({
                     key={item.id}
                     item={item}
                     product={product}
-                    stockAmount={stockByProduct?.get(item.product_id) ?? 0}
+                    stockAmount={product?.kind === 'concept'
+                      ? (product.subtree_amount ?? 0)
+                      : (stockByProduct?.get(item.product_id) ?? 0)}
                     variants={childrenByParent.get(item.product_id) ?? []}
                     fullCoverageStores={fullCoverageStores}
                     bundleName={item.bundle_id != null ? bundleNameById.get(item.bundle_id) : null}
@@ -3214,7 +3217,14 @@ function ShoppingQuickAdd({
                 name={p.name}
               />
               <div className="flex-1 min-w-0">
-                <p className="text-sm text-white font-medium truncate">{p.name}</p>
+                <p className="text-sm text-white font-medium truncate">
+                  {p.name}
+                  {p.kind === 'concept' && (
+                    <span className="ml-2 align-middle text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-gray-700 text-gray-300">
+                      yleinen
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-gray-400 truncate">
                   {p.product_group_id != null ? '' : 'Ei ryhmää'}
                 </p>
@@ -4033,6 +4043,9 @@ export default function App() {
 
     for (const p of allProducts) {
       if (!p.active) continue;
+      // A concept's stock sits on the products under it; Storage's own
+      // min-stock sync counts those, so it alone keeps concept rows.
+      if (p.kind === 'concept') continue;
       const min = parseFloat(p.min_stock_amount ?? 0);
       if (!(min > 0)) continue;
       const have = stockMap.get(p.id) ?? 0;

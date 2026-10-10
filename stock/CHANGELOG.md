@@ -1,3 +1,8 @@
+## 2.12.1
+
+- Ready for HA-storage 0.26.0, where generic products (concepts such as "Maito") are visible: quick-add marks them "yleinen", a generic row on the list counts the stock held by the products under it, and the "usually bought" chips list only products you can buy
+- The app no longer adds and removes minimum-stock rows for generic products in a loop; Storage keeps those rows
+
 ## 2.12.0
 
 - Shopping list rows show their unit ("3,5 dl", "2 kpl"); rows from recipes measured in grams or decilitres show the amount instead of a ±1 stepper; requires HA-storage 0.25.0
