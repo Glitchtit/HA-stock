@@ -1,3 +1,11 @@
+## 2.12.0
+
+- Shopping list rows show their unit ("3,5 dl", "2 kpl"); rows from recipes measured in grams or decilitres show the amount instead of a ±1 stepper; requires HA-storage 0.25.0
+- Printed shopping lists include units
+- The estimated total only counts rows measured in packages
+- Swapping a recipe row to a specific product keeps its amount and unit
+- Products created while shopping are counted in pieces (kpl) instead of grams
+
 ## 2.11.1
 
 - Shopping list: bundle picker stays open if the push fails, and the "Lista päättyy tähän" divider also appears when Setit is the only suggestion section
