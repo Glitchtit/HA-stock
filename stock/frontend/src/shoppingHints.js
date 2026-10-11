@@ -13,16 +13,50 @@ export function isRequirementRow(item) {
 
 // The "Osta …" line under a row: for a requirement, how many packages cover
 // it (first, so a long name cannot push it out of view), then which product
-// to pick up ('' when there is nothing to add).
-export function buyHintText(item) {
+// to pick up ('' when there is nothing to add). nameShown: the row's name
+// already is the product to buy, so only the count is left to say.
+export function buyHintText(item, nameShown = false) {
   const d = item?.display;
   if (!d?.buy_product_id) return '';
-  const other = d.buy_product_id !== item.product_id;
+  const other = d.buy_product_id !== item.product_id && !nameShown;
   if (!isRequirementRow(item) && d.unit_dimension !== 'count') {
     return other ? `Osta: ${d.buy_product_name}` : '';
   }
   const count = `${d.approx ? '≈' : ''}${d.buy_count} pkt`;
   return other ? `Osta ${count}: ${d.buy_product_name}` : `Osta ${count}`;
+}
+
+// The product a row is shown as: the product to buy when Storage picked one
+// for a generic row and the app has it loaded, else the row's own product.
+export function shownProduct(item, productById) {
+  const own = productById.get(item?.product_id);
+  const buyId = item?.display?.buy_product_id;
+  if (buyId == null || buyId === item?.product_id) return own;
+  return productById.get(buyId) ?? own;
+}
+
+// The small line under the name: the generic item the shown product stands
+// for, then the row's note.
+export function rowContext(item, rowProduct, shown) {
+  const parts = [];
+  if (shown && rowProduct && shown.id !== rowProduct.id) parts.push(rowProduct.name);
+  if (item?.note) parts.push(`📝 ${item.note}`);
+  return parts.join(' · ');
+}
+
+// Variant chips offer a choice; a single variant leaves none.
+export function variantChips(variants) {
+  return (variants?.length ?? 0) >= 2 ? variants : [];
+}
+
+// Buy products the app has not loaded yet (found by Storage moments ago).
+export function unknownBuyProducts(list, productById) {
+  const ids = new Set();
+  for (const item of list || []) {
+    const id = item?.display?.buy_product_id;
+    if (id != null && !item.done && !productById.has(id)) ids.add(id);
+  }
+  return [...ids].sort((a, b) => a - b);
 }
 
 // What one press of the ± stepper does. A requirement row steps its package

@@ -7,7 +7,8 @@ import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
 import {
   basketToApply, buyHintText, clearedToast, estimatedTotal as estimateShoppingTotal,
-  isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, restoredToast, stepTarget,
+  isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, restoredToast, rowContext,
+  shownProduct, stepTarget, unknownBuyProducts, variantChips,
 } from './shoppingHints';
 
 // ---------------------------------------------------------------------------
@@ -2015,10 +2016,11 @@ function ShoppingListOverlay({
   const aisles = useMemo(() => {
     const buckets = new Map(); // aisleIdx → { idx, label, items: [] }
     for (const item of list || []) {
+      // A generic row is shown, and shelved, as the product to buy.
       const product = productById.get(item.product_id);
-      const groupName = product?.product_group_id != null
-        ? groupById.get(product.product_group_id)?.name
-        : '';
+      const shown = shownProduct(item, productById) ?? product;
+      const groupId = shown?.product_group_id ?? product?.product_group_id;
+      const groupName = groupId != null ? groupById.get(groupId)?.name : '';
       const aisle = aisleFor(groupName);
       if (!buckets.has(aisle.idx)) {
         buckets.set(aisle.idx, { idx: aisle.idx, label: aisle.label, items: [] });
@@ -2026,6 +2028,7 @@ function ShoppingListOverlay({
       buckets.get(aisle.idx).items.push({
         item,
         product,
+        shown,
         groupName: groupName || '',
       });
     }
@@ -2038,8 +2041,8 @@ function ShoppingListOverlay({
         if (da !== db) return da - db;
         const ga = (a.groupName || '').localeCompare(b.groupName || '');
         if (ga !== 0) return ga;
-        const na = a.product?.name ?? a.item.ha_item_name ?? '';
-        const nb = b.product?.name ?? b.item.ha_item_name ?? '';
+        const na = a.shown?.name ?? a.item.ha_item_name ?? '';
+        const nb = b.shown?.name ?? b.item.ha_item_name ?? '';
         return na.localeCompare(nb);
       });
     }
@@ -2053,7 +2056,7 @@ function ShoppingListOverlay({
     let coverage = null; // null until the first counted item
     for (const item of list || []) {
       if (item.done) continue;
-      const product = productById.get(item.product_id);
+      const product = shownProduct(item, productById);
       if (!product || product.name === NOTE_SENTINEL_NAME) continue;
       const stores = product.stores || [];
       if (stores.length === 0) continue;
@@ -2080,7 +2083,7 @@ function ShoppingListOverlay({
     let total = 0;
     for (const item of list || []) {
       total += 1;
-      const product = productById.get(item.product_id);
+      const product = shownProduct(item, productById);
       if (!product || product.name === NOTE_SENTINEL_NAME) continue;
       for (const s of product.stores || []) {
         if (!byId.has(s.store_id)) {
@@ -2118,15 +2121,15 @@ function ShoppingListOverlay({
       const outAisles = [];
       for (const bucket of aisles) {
         const kept = [];
-        for (const { item, product } of bucket.items) {
+        for (const { item, product, shown } of bucket.items) {
           const isNote = product?.name === NOTE_SENTINEL_NAME;
-          const row = printRow(item, product);
+          const row = printRow(item, shown ?? product);
           if (!store) {
             kept.push(row);
             continue;
           }
           const entry = !isNote
-            ? (product?.stores || []).find((s) => s.store_id === store.store_id)
+            ? ((shown ?? product)?.stores || []).find((s) => s.store_id === store.store_id)
             : null;
           if (entry?.available) kept.push(row);
           else if (entry) continue; // store explicitly doesn't carry it
@@ -2249,15 +2252,16 @@ function ShoppingListOverlay({
                 {aisle.label}
               </h2>
               <ul className="space-y-2">
-                {aisle.items.map(({ item, product }) => (
+                {aisle.items.map(({ item, product, shown }) => (
                   <ShoppingListRow
                     key={item.id}
                     item={item}
                     product={product}
+                    shown={shown}
                     stockAmount={product?.kind === 'concept'
                       ? (product.subtree_amount ?? 0)
                       : (stockByProduct?.get(item.product_id) ?? 0)}
-                    variants={childrenByParent.get(item.product_id) ?? []}
+                    variants={variantChips(childrenByParent.get(item.product_id) ?? [])}
                     fullCoverageStores={fullCoverageStores}
                     bundleName={item.bundle_id != null ? bundleNameById.get(item.bundle_id) : null}
                     onToggleDone={onToggleDone}
@@ -3282,6 +3286,7 @@ function ShoppingQuickAdd({
 function ShoppingListRow({
   item,
   product,
+  shown,
   stockAmount = 0,
   variants,
   fullCoverageStores = new Set(),
@@ -3292,18 +3297,22 @@ function ShoppingListRow({
   onSwapToChild,
   onTogglePin,
 }) {
-  const name = product?.name ?? item.ha_item_name ?? `#${item.product_id}`;
+  // A generic row ("Crème fraîche") wears the product to buy: its name,
+  // picture and stores; the generic name moves to the small line.
+  const face = shown ?? product;
+  const name = face?.name ?? item.ha_item_name ?? `#${item.product_id}`;
+  const nameShown = !!face && face.id !== item.product_id;
   // Kept-in-stock items that ran fully out get a red "Loppu" badge; otherwise
   // the auto-added (below-threshold) badge stays amber "Vähissä".
   const outOfStock = parseFloat(stockAmount ?? 0) <= 0;
   const isNote = product?.name === NOTE_SENTINEL_NAME;
   const displayName = isNote ? (item.note || 'Muistilappu') : name;
-  const note = isNote ? '' : (item.note || '');
-  const imgUrl = isNote ? null : pictureUrl(product?.picture_filename);
-  const availableStores = isNote ? [] : (product?.stores || []).filter((s) => s.available);
+  const context = isNote ? '' : rowContext(item, product, face);
+  const imgUrl = isNote ? null : pictureUrl(face?.picture_filename);
+  const availableStores = isNote ? [] : (face?.stores || []).filter((s) => s.available);
 
   const amount = parseFloat(item.amount ?? 1) || 1;
-  const hint = isNote || item.done ? '' : buyHintText(item);
+  const hint = isNote || item.done ? '' : buyHintText(item, nameShown);
 
   // A requirement row ("3 dl") steps its package count and becomes packages;
   // other rows step their amount (shoppingHints.stepTarget).
@@ -3370,8 +3379,8 @@ function ShoppingListRow({
                 ))}
               </span>
             )}
-            {note && (
-              <p className="text-xs text-gray-400 truncate">📝 {note}</p>
+            {context && (
+              <p className="text-xs text-gray-400 truncate">{context}</p>
             )}
           </div>
         </div>
@@ -4212,6 +4221,21 @@ export default function App() {
       // Non-fatal — the list refreshes on the next poll.
     }
   }, []);
+
+  // Storage may find a product for a generic row in the background; load it
+  // so the row can show its name and picture (once per product id).
+  const requestedBuyIdsRef = useRef(new Set());
+  useEffect(() => {
+    if (!(allProducts || []).length) return;
+    const byId = new Map(allProducts.map((p) => [p.id, p]));
+    const missing = unknownBuyProducts(shoppingList, byId)
+      .filter((id) => !requestedBuyIdsRef.current.has(id));
+    if (!missing.length) return;
+    missing.forEach((id) => requestedBuyIdsRef.current.add(id));
+    axios.get(`${API_BASE}/products`)
+      .then((r) => { if (Array.isArray(r.data)) setAllProducts(r.data); })
+      .catch(() => {});
+  }, [shoppingList, allProducts]);
 
   // A purchase took rows off (or down) the list (`cleared_rows` from
   // /stock/add or apply-basket): say which, and show the new list.

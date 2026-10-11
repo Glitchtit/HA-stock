@@ -3,7 +3,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   basketToApply, buyHintText, clearedToast, estimatedTotal, isRequirementRow,
-  normalizeShoppingRows, printRow, removeFromBasket, restoredToast, stepTarget,
+  normalizeShoppingRows, printRow, removeFromBasket, restoredToast, rowContext,
+  shownProduct, stepTarget, unknownBuyProducts, variantChips,
 } from './shoppingHints.js';
 
 const display = (dim, extra = {}) => ({ qty_text: '1', unit_abbr: null, unit_dimension: dim, ...extra });
@@ -105,4 +106,50 @@ test('the toast names the rows an undone scan put back on the list', () => {
   assert.equal(restoredToast([{ id: 9, product_id: 1, amount: 1 }, { id: 8, product_id: 2, amount: 3 }], names),
     'Palautettu listalle: Maito, Kerma');
   assert.equal(restoredToast([], names), '');
+});
+
+const byId = (...ps) => new Map(ps.map((p) => [p.id, p]));
+const cream = { id: 1, name: 'Crème fraîche', kind: 'concept', product_group_id: 9 };
+const pirkka = { id: 7, name: 'Pirkka creme fraiche 150g', picture_filename: 'p.png', product_group_id: 9 };
+const conceptRow = (extra = {}) => ({ id: 5, product_id: 1, note: 'Reseptistä: Piirakka',
+  display: display('package', { buy_product_id: 7, buy_product_name: pirkka.name, buy_count: 1, ...extra }) });
+
+test('a generic row is shown as the product to buy when the app knows it', () => {
+  assert.equal(shownProduct(conceptRow(), byId(cream, pirkka)), pirkka);
+});
+
+test('shownProduct falls back to the row product (unknown buy product, no pick, own product)', () => {
+  assert.equal(shownProduct(conceptRow(), byId(cream)), cream);
+  assert.equal(shownProduct(conceptRow({ buy_product_id: null }), byId(cream, pirkka)), cream);
+  assert.equal(shownProduct({ product_id: 7, display: display('package', { buy_product_id: 7 }) },
+    byId(pirkka)), pirkka);
+});
+
+test('the context line names the generic item, then the note', () => {
+  assert.equal(rowContext(conceptRow(), cream, pirkka), 'Crème fraîche · 📝 Reseptistä: Piirakka');
+  assert.equal(rowContext(conceptRow(), cream, cream), '📝 Reseptistä: Piirakka');
+  assert.equal(rowContext({ ...conceptRow(), note: '' }, cream, cream), '');
+});
+
+test('when the name already shows the product, the hint keeps only the count', () => {
+  assert.equal(buyHintText(conceptRow(), true), '');
+  const need = conceptRow({ unit_dimension: 'mass', buy_count: 2 });
+  assert.equal(buyHintText(need, true), 'Osta 2 pkt');
+  assert.equal(buyHintText(need), `Osta 2 pkt: ${pirkka.name}`);
+});
+
+test('variant chips need a choice', () => {
+  assert.deepEqual(variantChips([pirkka]), []);
+  assert.deepEqual(variantChips([pirkka, cream]), [pirkka, cream]);
+  assert.deepEqual(variantChips(undefined), []);
+});
+
+test('buy products missing from the cache are listed once, done rows ignored', () => {
+  const rows = [conceptRow(), conceptRow(), { ...conceptRow({ buy_product_id: 8 }), done: true }];
+  assert.deepEqual(unknownBuyProducts(rows, byId(cream)), [7]);
+  assert.deepEqual(unknownBuyProducts(rows, byId(cream, pirkka)), []);
+});
+
+test('printRow takes the shown product name', () => {
+  assert.equal(printRow(conceptRow(), pirkka).name, pirkka.name);
 });
