@@ -1,3 +1,11 @@
+## 2.14.0
+
+- A generic row on the shopping list ("Crème fraîche") shows the product to buy: its name, picture, stores and aisle, with the generic name and the note in the small line under it. Rows Storage has no product for look as before
+- Variant chips appear only when there is more than one variant to choose from
+- Printing the list uses the product name
+- The quick-add store search waits up to about 45 seconds while the Scraper is busy (for example with Storage's product search) instead of failing after a few seconds
+- A product Storage finds in the background shows up without reopening the app. Works best with HA-storage 0.28.0
+
 ## 2.13.1
 
 - Undoing a mis-scan (swipe −1 in shopping mode) puts the rows that scan took off the list back, and says which. Requires HA-storage 0.27.1
