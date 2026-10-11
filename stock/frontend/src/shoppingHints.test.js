@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  basketToApply, buyHintText, clearedToast, estimatedTotal, isRequirementRow,
+  basketToApply, busyRetryDelay, buyHintText, clearedToast, estimatedTotal, isRequirementRow,
   normalizeShoppingRows, printRow, removeFromBasket, restoredToast, rowContext,
   shownProduct, stepTarget, unknownBuyProducts, variantChips,
 } from './shoppingHints.js';
@@ -152,4 +152,10 @@ test('buy products missing from the cache are listed once, done rows ignored', (
 
 test('printRow takes the shown product name', () => {
   assert.equal(printRow(conceptRow(), pirkka).name, pirkka.name);
+});
+
+test('a busy scraper is waited out for about 45 seconds, then the search gives up', () => {
+  assert.equal(busyRetryDelay(0), 1500);
+  assert.equal(busyRetryDelay(29), 1500);
+  assert.equal(busyRetryDelay(30), null);
 });

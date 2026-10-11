@@ -6,7 +6,7 @@ import ShoppingAttributionModal from './components/ShoppingAttributionModal';
 import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
 import {
-  basketToApply, buyHintText, clearedToast, estimatedTotal as estimateShoppingTotal,
+  basketToApply, busyRetryDelay, buyHintText, clearedToast, estimatedTotal as estimateShoppingTotal,
   isRequirementRow, normalizeShoppingRows, printRow, removeFromBasket, restoredToast, rowContext,
   shownProduct, stepTarget, unknownBuyProducts, variantChips,
 } from './shoppingHints';
@@ -3063,11 +3063,13 @@ function ShoppingQuickAdd({
     };
 
     const POLL_INTERVAL = 600;
-    const POLL_DEADLINE = Date.now() + 30_000;
+    // Counted from when the scraper takes the search, not from the first try:
+    // waiting out a busy scraper must not eat the search's own time.
+    let pollDeadline = 0;
 
     const pollOnce = (taskId) => {
       if (cancelled || myId !== reqIdRef.current) return;
-      if (Date.now() > POLL_DEADLINE) {
+      if (Date.now() > pollDeadline) {
         fail(new Error('Aikakatkaisu'));
         return;
       }
@@ -3105,17 +3107,19 @@ function ShoppingQuickAdd({
             return;
           }
           if (data?.task_id) {
+            pollDeadline = Date.now() + 30_000;
             pollOnce(data.task_id);
           } else {
             finish(data ?? {});
           }
         })
         .catch((err) => {
-          // 409 = scraper busy with another job. Back off briefly and retry
-          // up to 3 times so a previous in-flight search clears.
-          if (err?.response?.status === 409 && busyRetries < 3) {
+          // 409 = scraper busy with another job (a previous search, or
+          // Storage's background product search): wait it out for a while.
+          const delay = err?.response?.status === 409 ? busyRetryDelay(busyRetries) : null;
+          if (delay != null) {
             busyRetries += 1;
-            retryTimer = setTimeout(startSearch, 1500);
+            retryTimer = setTimeout(startSearch, delay);
             return;
           }
           fail(err);

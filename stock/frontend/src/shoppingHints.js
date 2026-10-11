@@ -59,6 +59,13 @@ export function unknownBuyProducts(list, productById) {
   return [...ids].sort((a, b) => a - b);
 }
 
+// The scraper runs one job at a time (409 while busy). Storage's background
+// product search can hold it for a while, so the quick-add search waits about
+// 45 seconds before giving up: the delay before retry N, or null to stop.
+export function busyRetryDelay(retries) {
+  return retries < 30 ? 1500 : null;
+}
+
 // What one press of the ± stepper does. A requirement row steps its package
 // count and becomes a package row (unit_id null); other rows step their own
 // amount. Below one, the row goes.
