@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import axios from 'axios';
 import { Html5Qrcode } from 'html5-qrcode';
 import { HardwareScanInput } from './components/HardwareScanInput';
+import { groupCount, stockText } from './stockFormat.js';
 import ShoppingAttributionModal from './components/ShoppingAttributionModal';
 import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
@@ -108,16 +109,6 @@ function ProductThumbnail({ imageUrl, name }) {
 // ---------------------------------------------------------------------------
 function fmtQty(n) {
   return String(Math.round(Number(n) || 0));
-}
-
-// ---------------------------------------------------------------------------
-// Helper – format the "X in stock (Y opened)" label
-// ---------------------------------------------------------------------------
-function stockLabel(amount, amountOpened) {
-  const qty = amount % 1 === 0 ? amount : amount.toFixed(2);
-  const opened = Math.floor(amountOpened || 0);
-  if (opened > 0) return `${qty} in stock (${opened} opened)`;
-  return `${qty} in stock`;
 }
 
 // ---------------------------------------------------------------------------
@@ -329,20 +320,25 @@ function fuzzyScore(query, name) {
 // real product. Created lazily on first use.
 const NOTE_SENTINEL_NAME = 'Muistilappu';
 
-// Storage's "kpl" unit id, looked up once. New retail products are counted
-// in kpl; unit id 1 is grams in a seeded Storage DB.
-let kplUnitIdPromise = null;
-function getKplUnitId() {
-  if (!kplUnitIdPromise) {
-    kplUnitIdPromise = axios
+// Storage's units, looked up once (a failed lookup is retried next time).
+let unitsPromise = null;
+function getUnits() {
+  if (!unitsPromise) {
+    unitsPromise = axios
       .get(`${API_BASE}/units`)
-      .then((r) => (r.data || []).find((u) => u.abbreviation === 'kpl')?.id ?? null)
+      .then((r) => r.data || [])
       .catch(() => {
-        kplUnitIdPromise = null;
-        return null;
+        unitsPromise = null;
+        return [];
       });
   }
-  return kplUnitIdPromise;
+  return unitsPromise;
+}
+
+// Storage's "kpl" unit id. New retail products are counted in kpl; unit id 1
+// is grams in a seeded Storage DB.
+function getKplUnitId() {
+  return getUnits().then((units) => units.find((u) => u.abbreviation === 'kpl')?.id ?? null);
 }
 
 // ---------------------------------------------------------------------------
@@ -351,6 +347,7 @@ function getKplUnitId() {
 // ---------------------------------------------------------------------------
 function ProductDetailOverlay({
   item,
+  unitAbbrById,
   parentProduct,
   onClose,
   onToggleKeep,
@@ -415,7 +412,7 @@ function ProductDetailOverlay({
         <div className="px-6 pb-4 text-center">
           <h2 className="text-xl font-bold text-gray-100">{name}</h2>
           <p className="text-gray-400 mt-1">
-            {stockLabel(item.amount, item.amount_opened)}
+            {stockText(item.amount, item.amount_opened, item.product, unitAbbrById)}
           </p>
         </div>
 
@@ -612,7 +609,7 @@ function OverlayImage({ imageUrl, name }) {
 //       • Drag left/right → consume/add
 //       • Drag down → mark as "opened"
 // ---------------------------------------------------------------------------
-function SwipeableProductRow({ item, onConsume, onAdd, onOpen, onItemClick }) {
+function SwipeableProductRow({ item, unitAbbrById, onConsume, onAdd, onOpen, onItemClick }) {
   const rowRef = useRef(null);
   const addBgRef = useRef(null);
   const consumeBgRef = useRef(null);
@@ -988,7 +985,7 @@ function SwipeableProductRow({ item, onConsume, onAdd, onOpen, onItemClick }) {
         <div className="flex-1 min-w-0">
           <p className="font-medium text-gray-100 truncate">{name}</p>
           <p className="text-sm text-gray-400">
-            {stockLabel(item.amount, item.amount_opened)}
+            {stockText(item.amount, item.amount_opened, item.product, unitAbbrById)}
           </p>
         </div>
 
@@ -1017,7 +1014,7 @@ function SwipeableProductRow({ item, onConsume, onAdd, onOpen, onItemClick }) {
 // ---------------------------------------------------------------------------
 // ProductGroup  (collapsible accordion)
 // ---------------------------------------------------------------------------
-function ProductGroup({ group, items, onConsume, onAdd, onOpen, onItemClick, forceOpen, forceKey, isFavorite, onToggleFavorite }) {
+function ProductGroup({ group, items, unitAbbrById, onConsume, onAdd, onOpen, onItemClick, forceOpen, forceKey, isFavorite, onToggleFavorite }) {
   const [open, setOpen] = useState(true);
 
   // Sync local state when parent triggers a bulk expand/collapse
@@ -1027,8 +1024,7 @@ function ProductGroup({ group, items, onConsume, onAdd, onOpen, onItemClick, for
     }
   }, [forceOpen, forceKey]);
 
-  const totalQty = items.reduce((sum, i) => sum + i.amount, 0);
-  const displayQty = totalQty % 1 === 0 ? totalQty : totalQty.toFixed(2);
+  const displayQty = groupCount(items);
 
   return (
     <div className="bg-gray-800 rounded-xl shadow-sm overflow-hidden">
@@ -1085,6 +1081,7 @@ function ProductGroup({ group, items, onConsume, onAdd, onOpen, onItemClick, for
             <SwipeableProductRow
               key={item.product_id}
               item={item}
+              unitAbbrById={unitAbbrById}
               onConsume={onConsume}
               onAdd={onAdd}
               onOpen={onOpen}
@@ -3329,6 +3326,51 @@ function ShoppingListRow({
     onStep(item, +1);
   };
 
+  const controls = (
+    <>
+      {/* Amount with a ± stepper; on a requirement row ("3,5 dl") the
+          stepper counts packages of the product to buy. */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        <button
+          onClick={handleDec}
+          className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+          aria-label={isRequirementRow(item) ? 'Yksi pakkaus vähemmän' : 'Vähennä'}
+        >
+          −
+        </button>
+        <span className="text-sm text-white font-semibold min-w-6 px-1 text-center whitespace-nowrap">
+          {item.display?.qty_text ?? (amount % 1 === 0 ? amount : amount.toFixed(1))}
+        </span>
+        <button
+          onClick={handleInc}
+          className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
+          aria-label={isRequirementRow(item) ? 'Yksi pakkaus lisää' : 'Lisää'}
+        >
+          +
+        </button>
+      </div>
+
+      {/* Pin to exact brand — pinned rows are excluded from cross-brand AI
+          fulfillment (only this exact product ticks them off). */}
+      {!isNote && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onTogglePin?.(item); }}
+          className={`w-7 h-7 flex-shrink-0 rounded-lg transition ${
+            item.pinned
+              ? 'bg-gray-700 ring-1 ring-inset ring-brand-orange'
+              : 'grayscale opacity-40 hover:opacity-100 hover:grayscale-0 hover:bg-gray-700'
+          }`}
+          aria-label={item.pinned ? 'Salli mikä tahansa merkki' : 'Lukitse tähän merkkiin'}
+          title={item.pinned
+            ? 'Vain tämä tuote täyttää — mikä tahansa merkki ei kelpaa'
+            : 'Mikä tahansa saman tyypin merkki täyttää tämän'}
+        >
+          📌
+        </button>
+      )}
+    </>
+  );
+
   return (
     <li className={`bg-gray-800 rounded-xl border border-gray-700/60 ${item.done ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-3 px-3 py-2">
@@ -3389,46 +3431,9 @@ function ShoppingListRow({
           </div>
         </div>
 
-        {/* Amount with a ± stepper; on a requirement row ("3,5 dl") the
-            stepper counts packages of the product to buy. */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={handleDec}
-            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-            aria-label={isRequirementRow(item) ? 'Yksi pakkaus vähemmän' : 'Vähennä'}
-          >
-            −
-          </button>
-          <span className="text-sm text-white font-semibold min-w-6 px-1 text-center whitespace-nowrap">
-            {item.display?.qty_text ?? (amount % 1 === 0 ? amount : amount.toFixed(1))}
-          </span>
-          <button
-            onClick={handleInc}
-            className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-            aria-label={isRequirementRow(item) ? 'Yksi pakkaus lisää' : 'Lisää'}
-          >
-            +
-          </button>
-        </div>
-
-        {/* Pin to exact brand — pinned rows are excluded from cross-brand AI
-            fulfillment (only this exact product ticks them off). */}
-        {!isNote && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onTogglePin?.(item); }}
-            className={`w-7 h-7 flex-shrink-0 rounded-lg transition ${
-              item.pinned
-                ? 'bg-gray-700 ring-1 ring-inset ring-brand-orange'
-                : 'grayscale opacity-40 hover:opacity-100 hover:grayscale-0 hover:bg-gray-700'
-            }`}
-            aria-label={item.pinned ? 'Salli mikä tahansa merkki' : 'Lukitse tähän merkkiin'}
-            title={item.pinned
-              ? 'Vain tämä tuote täyttää — mikä tahansa merkki ei kelpaa'
-              : 'Mikä tahansa saman tyypin merkki täyttää tämän'}
-          >
-            📌
-          </button>
-        )}
+        {/* ≥sm the stepper and pin sit in the row; phones get them on a
+            second line so the name keeps the width. */}
+        <div className="hidden sm:flex items-center gap-3 flex-shrink-0">{controls}</div>
 
         {/* Delete */}
         <button
@@ -3441,9 +3446,19 @@ function ShoppingListRow({
         </button>
       </div>
 
-      {/* What to buy, on its own line so a phone shows the whole name */}
+      {/* Phones: the stepper and pin under the name, beside what to buy */}
+      <div className="sm:hidden flex items-center gap-2 pl-[3.25rem] pr-3 pb-2 -mt-1">
+        {controls}
+        {hint && (
+          <p className="flex-1 min-w-0 text-xs text-gray-300 truncate" title={hint}>
+            🛒 {hint}
+          </p>
+        )}
+      </div>
+
+      {/* What to buy, on its own line */}
       {hint && (
-        <p className="px-3 pb-2 -mt-1 text-xs text-gray-300 truncate" title={hint}>
+        <p className="hidden sm:block px-3 pb-2 -mt-1 text-xs text-gray-300 truncate" title={hint}>
           🛒 {hint}
         </p>
       )}
@@ -3540,6 +3555,8 @@ export default function App() {
   const [disconnected, setDisconnected] = useState(false);
   // Shopping list state — populated alongside stock by fetchStockData.
   const [allProducts, setAllProducts] = useState(() => cacheRead('allProducts') || []);
+  // Unit abbreviations by id, for showing a partial pack in what it holds.
+  const [unitAbbrById, setUnitAbbrById] = useState(() => new Map());
   const [shoppingList, setShoppingList] = useState(() => cacheRead('shoppingList') || []);
   const [showShoppingList, setShowShoppingList] = useState(false);
   const [shoppingBundles, setShoppingBundles] = useState([]);
@@ -3883,6 +3900,15 @@ export default function App() {
   // ---- Storage health check with retry ------------------------------------
   const [healthRetries, setHealthRetries] = useState(0);
   const MAX_HEALTH_RETRIES = 60;
+
+  useEffect(() => {
+    if (!storageReady) return undefined;
+    let cancelled = false;
+    getUnits().then((units) => {
+      if (!cancelled) setUnitAbbrById(new Map(units.map((u) => [u.id, u.abbreviation])));
+    });
+    return () => { cancelled = true; };
+  }, [storageReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -6462,6 +6488,7 @@ export default function App() {
                 key={gid}
                 group={group}
                 items={grouped[gid]}
+                unitAbbrById={unitAbbrById}
                 onConsume={handleConsume}
                 onAdd={handleAddFromList}
                 onOpen={handleOpenProduct}
@@ -6483,6 +6510,7 @@ export default function App() {
       {/* ── Product detail overlay ─────────────────────────────────── */}
       <ProductDetailOverlay
         item={selectedItem}
+        unitAbbrById={unitAbbrById}
         parentProduct={parentProduct}
         onClose={handleCloseOverlay}
         onToggleKeep={handleToggleKeepInStock}

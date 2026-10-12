@@ -1,3 +1,9 @@
+## 2.14.1
+
+- Shopping list on a phone: the ± stepper and pin moved to a second line under the name, so the product name is readable instead of cut to a few letters
+- Stock list: a partly used pack shows what is left in it ("7 kpl", "200 g") instead of a pack fraction ("0.70"), and a partly opened pack counts as opened
+- Group headers on the stock list count products instead of adding up pack fractions
+
 ## 2.14.0
 
 - A generic row on the shopping list ("Crème fraîche") shows the product to buy: its name, picture, stores and aisle, with the generic name and the note in the small line under it. Rows Storage has no product for look as before
