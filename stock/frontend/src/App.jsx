@@ -3396,7 +3396,7 @@ function ShoppingListRow({
         )}
 
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${item.done ? 'line-through text-gray-500' : 'text-white'}`}>
+          <p className={`text-sm font-medium line-clamp-2 break-words ${item.done ? 'line-through text-gray-500' : 'text-white'}`}>
             {displayName}
           </p>
           <div className="flex items-center gap-2 flex-wrap">

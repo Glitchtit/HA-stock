@@ -1,3 +1,7 @@
+## 2.14.2
+
+- Long product names on the shopping list wrap to a second line instead of being cut off
+
 ## 2.14.1
 
 - Shopping list on a phone: the ± stepper and pin moved to a second line under the name, so the product name is readable instead of cut to a few letters
