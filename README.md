@@ -21,9 +21,9 @@
 - **Stock at a glance** — products grouped by product group with photos, location tabs, favourite groups pinned to the top, and an estimated value of what's on the shelf.
 - **One-gesture changes** — swipe a row right to add one, left to consume one, or long-press and drag down to mark it opened. Changes show a 5-second undo toast.
 - **Barcode scanning** — use the phone camera or a Bluetooth scanner to scan shopping, count inventory, consume, or add to the shopping list. Unknown barcodes are looked up through the Scraper. A photo of a receipt can also be parsed by AI and added to stock in one go.
-- **Shopping list in aisle order** — "Ostoslista" groups rows by Finnish grocery aisle, shows which stores carry each item, the product to buy under a generic row, and an estimated total. Low-stock items are added automatically.
-- **Suggestions** — "Ehdotus" proposes what will run out within a week, "Toistuvat ostokset" what is due by purchase rhythm, "Suositukset" what was recently used up, and "Setit" pushes bundles made in Recipes onto the list.
-- **Use soon** — "Käytä pian" lists lots sorted by best-before date, with a header badge for expired or nearly expired items.
+- **Shopping list in aisle order** — The shopping list groups rows by Finnish grocery aisle, shows which stores carry each item, the product to buy under a generic row, and an estimated total. Low-stock items are added automatically.
+- **Suggestions** — "Suggestion" proposes what will run out within a week, "Recurring purchases" what is due by purchase rhythm, "Recommendations" what was recently used up, and "Sets" pushes bundles made in Recipes onto the list.
+- **Use soon** — lists lots sorted by best-before date, with a header badge for expired or nearly expired items.
 - **Print the list** — 🖨 Tulosta sends the list to the Print add-on, filtered to the store you pick.
 
 ## 🚀 Installation
