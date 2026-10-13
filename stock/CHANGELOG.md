@@ -1,3 +1,7 @@
+## 2.14.3
+
+- New icon and logo in the add-on store, part of one matching set across all GlitchyRee apps
+
 ## 2.14.2
 
 - Long product names on the shopping list wrap to a second line instead of being cut off
