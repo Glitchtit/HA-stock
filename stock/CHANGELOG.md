@@ -1,3 +1,8 @@
+## 2.14.4
+
+- The whole interface is in English: the shopping list, Use soon, sets, suggestions, receipt scanning, badges and messages. Product, group and store names stay in Finnish
+- A printed shopping list is titled "Shopping list — <store>"
+
 ## 2.14.3
 
 - New icon and logo in the add-on store, part of one matching set across all GlitchyRee apps

@@ -11,7 +11,7 @@ export function isRequirementRow(item) {
   return dim === 'mass' || dim === 'volume';
 }
 
-// The "Osta …" line under a row: for a requirement, how many packages cover
+// The "Buy …" line under a row: for a requirement, how many packages cover
 // it (first, so a long name cannot push it out of view), then which product
 // to pick up ('' when there is nothing to add). nameShown: the row's name
 // already is the product to buy, so only the count is left to say.
@@ -20,10 +20,10 @@ export function buyHintText(item, nameShown = false) {
   if (!d?.buy_product_id) return '';
   const other = d.buy_product_id !== item.product_id && !nameShown;
   if (!isRequirementRow(item) && d.unit_dimension !== 'count') {
-    return other ? `Osta: ${d.buy_product_name}` : '';
+    return other ? `Buy: ${d.buy_product_name}` : '';
   }
   const count = `${d.approx ? '≈' : ''}${d.buy_count} pkt`;
-  return other ? `Osta ${count}: ${d.buy_product_name}` : `Osta ${count}`;
+  return other ? `Buy ${count}: ${d.buy_product_name}` : `Buy ${count}`;
 }
 
 // The product a row is shown as: the product to buy when Storage picked one
@@ -155,11 +155,11 @@ function rowNames(rows, nameById) {
 // Toast text for the rows a purchase took off (or down) the list.
 export function clearedToast(clearedRows, nameById) {
   const names = rowNames(clearedRows, nameById);
-  return names.length ? `Ostoslistalta: ${names.join(', ')}` : '';
+  return names.length ? `Off the shopping list: ${names.join(', ')}` : '';
 }
 
 // Toast text for the rows an undone scan (swipe −1) put back on the list.
 export function restoredToast(restoredRows, nameById) {
   const names = rowNames(restoredRows, nameById);
-  return names.length ? `Palautettu listalle: ${names.join(', ')}` : '';
+  return names.length ? `Back on the shopping list: ${names.join(', ')}` : '';
 }

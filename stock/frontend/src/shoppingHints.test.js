@@ -20,20 +20,20 @@ test('mass and volume rows are requirements; packages and pieces are not', () =>
 test('the buy hint says how many packages, then which product (the count survives truncation)', () => {
   const concept = { product_id: 1, display: display('volume', {
     buy_product_id: 7, buy_product_name: 'Vispikerma 2 dl', buy_count: 2, approx: false }) };
-  assert.equal(buyHintText(concept), 'Osta 2 pkt: Vispikerma 2 dl');
+  assert.equal(buyHintText(concept), 'Buy 2 pkt: Vispikerma 2 dl');
   const estimated = { product_id: 1, display: display('mass', {
     buy_product_id: 8, buy_product_name: 'Vehnäjauho 2 kg', buy_count: 1, approx: true }) };
-  assert.equal(buyHintText(estimated), 'Osta ≈1 pkt: Vehnäjauho 2 kg');
+  assert.equal(buyHintText(estimated), 'Buy ≈1 pkt: Vehnäjauho 2 kg');
   const packages = { product_id: 1, display: display('package', {
     buy_product_id: 9, buy_product_name: 'Kevytmaito 1 l', buy_count: 2 }) };
-  assert.equal(buyHintText(packages), 'Osta: Kevytmaito 1 l');
+  assert.equal(buyHintText(packages), 'Buy: Kevytmaito 1 l');
 });
 
 test('a product bought as itself needs a hint only for a requirement', () => {
   const sku = { product_id: 5, display: display('package', { buy_product_id: 5, buy_product_name: 'X', buy_count: 3 }) };
   assert.equal(buyHintText(sku), '');
   const need = { product_id: 5, display: display('volume', { buy_product_id: 5, buy_product_name: 'X', buy_count: 2 }) };
-  assert.equal(buyHintText(need), 'Osta 2 pkt');
+  assert.equal(buyHintText(need), 'Buy 2 pkt');
   assert.equal(buyHintText({ product_id: 5, display: display('package') }), '');
 });
 
@@ -97,21 +97,21 @@ test('correcting an over-scan takes the newest scans of that product out of the 
 test('the toast names the rows a purchase took off the list', () => {
   const names = new Map([[1, 'Maito'], [2, 'Kerma']]);
   assert.equal(clearedToast([{ id: 9, product_id: 1, removed: true, amount: 0 },
-    { id: 8, product_id: 2, removed: false, amount: 1 }], names), 'Ostoslistalta: Maito, Kerma');
+    { id: 8, product_id: 2, removed: false, amount: 1 }], names), 'Off the shopping list: Maito, Kerma');
   assert.equal(clearedToast([], names), '');
 });
 
 test('the toast names the rows an undone scan put back on the list', () => {
   const names = new Map([[1, 'Maito'], [2, 'Kerma']]);
   assert.equal(restoredToast([{ id: 9, product_id: 1, amount: 1 }, { id: 8, product_id: 2, amount: 3 }], names),
-    'Palautettu listalle: Maito, Kerma');
+    'Back on the shopping list: Maito, Kerma');
   assert.equal(restoredToast([], names), '');
 });
 
 const byId = (...ps) => new Map(ps.map((p) => [p.id, p]));
 const cream = { id: 1, name: 'Crème fraîche', kind: 'concept', product_group_id: 9 };
 const pirkka = { id: 7, name: 'Pirkka creme fraiche 150g', picture_filename: 'p.png', product_group_id: 9 };
-const conceptRow = (extra = {}) => ({ id: 5, product_id: 1, note: 'Reseptistä: Piirakka',
+const conceptRow = (extra = {}) => ({ id: 5, product_id: 1, note: 'From recipe: Piirakka',
   display: display('package', { buy_product_id: 7, buy_product_name: pirkka.name, buy_count: 1, ...extra }) });
 
 test('a generic row is shown as the product to buy when the app knows it', () => {
@@ -126,16 +126,16 @@ test('shownProduct falls back to the row product (unknown buy product, no pick, 
 });
 
 test('the context line names the generic item, then the note', () => {
-  assert.equal(rowContext(conceptRow(), cream, pirkka), 'Crème fraîche · 📝 Reseptistä: Piirakka');
-  assert.equal(rowContext(conceptRow(), cream, cream), '📝 Reseptistä: Piirakka');
+  assert.equal(rowContext(conceptRow(), cream, pirkka), 'Crème fraîche · 📝 From recipe: Piirakka');
+  assert.equal(rowContext(conceptRow(), cream, cream), '📝 From recipe: Piirakka');
   assert.equal(rowContext({ ...conceptRow(), note: '' }, cream, cream), '');
 });
 
 test('when the name already shows the product, the hint keeps only the count', () => {
   assert.equal(buyHintText(conceptRow(), true), '');
   const need = conceptRow({ unit_dimension: 'mass', buy_count: 2 });
-  assert.equal(buyHintText(need, true), 'Osta 2 pkt');
-  assert.equal(buyHintText(need), `Osta 2 pkt: ${pirkka.name}`);
+  assert.equal(buyHintText(need, true), 'Buy 2 pkt');
+  assert.equal(buyHintText(need), `Buy 2 pkt: ${pirkka.name}`);
 });
 
 test('variant chips need a choice', () => {

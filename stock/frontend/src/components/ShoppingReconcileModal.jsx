@@ -56,10 +56,10 @@ export default function ShoppingReconcileModal({ apiBase, proposals, onDone, onT
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-gray-800 text-white rounded-2xl px-5 py-5 max-w-sm w-full">
-        <h3 className="text-lg font-semibold">Eri merkki — täytetäänkö lista?</h3>
+        <h3 className="text-lg font-semibold">Different brand — tick off the list?</h3>
         <p className="text-sm text-gray-300 mt-1">
-          Ostit tuotteita, jotka näyttävät olevan eri merkki samasta listalla
-          olevasta tuotteesta. Merkitäänkö ne tehdyiksi?
+          You bought products that look like a different brand of something on
+          the list. Mark those rows as done?
         </p>
         <ul className="mt-4 space-y-2 max-h-72 overflow-y-auto">
           {proposals.map((p) => {
@@ -92,7 +92,7 @@ export default function ShoppingReconcileModal({ apiBase, proposals, onDone, onT
                   </span>
                   {p.confidence === 'medium' && (
                     <span className="text-[10px] uppercase tracking-wide text-amber-300/80 whitespace-nowrap mt-0.5">
-                       epävarma
+                       uncertain
                     </span>
                   )}
                 </button>
@@ -107,7 +107,7 @@ export default function ShoppingReconcileModal({ apiBase, proposals, onDone, onT
             className="w-full py-3 rounded-xl bg-brand-cobalt hover:bg-brand-cobalt-400 font-semibold disabled:opacity-50"
             onClick={confirm}
           >
-            {submitting ? 'Merkitään…' : 'Merkitse valitut tehdyiksi'}
+            {submitting ? 'Marking…' : 'Mark selected as done'}
           </button>
           <button
             type="button"
@@ -115,7 +115,7 @@ export default function ShoppingReconcileModal({ apiBase, proposals, onDone, onT
             className="w-full py-2 rounded-xl bg-gray-700 hover:bg-gray-600 disabled:opacity-50"
             onClick={() => onDone?.()}
           >
-            Ohita
+            Skip
           </button>
         </div>
       </div>

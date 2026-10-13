@@ -105,7 +105,7 @@ function ProductThumbnail({ imageUrl, name }) {
 // ---------------------------------------------------------------------------
 // Helper – round a quantity to a whole number for the suggestion cards. These
 // count discrete items (a can is consumed or not), so a fractional rate like
-// 10.9/vk is just noise — show 11.
+// 10.9/wk is just noise — show 11.
 // ---------------------------------------------------------------------------
 function fmtQty(n) {
   return String(Math.round(Number(n) || 0));
@@ -1055,9 +1055,9 @@ function ProductGroup({ group, items, unitAbbrById, onConsume, onAdd, onOpen, on
                   ? 'text-amber-400 hover:text-amber-300'
                   : 'text-emerald-700 hover:text-amber-400'
               }`}
-              aria-label={isFavorite ? 'Poista suosikeista' : 'Lisää suosikkeihin'}
+              aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
               aria-pressed={isFavorite ? 'true' : 'false'}
-              title={isFavorite ? 'Poista suosikeista' : 'Lisää suosikkeihin'}
+              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
             >
               {isFavorite ? '★' : '☆'}
             </span>
@@ -1783,7 +1783,7 @@ function PrintStorePicker({ stores, lastStoreId, onPick, onClose }) {
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-          <h2 className="text-white text-lg font-bold">Mihin kauppaan?</h2>
+          <h2 className="text-white text-lg font-bold">Which store?</h2>
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-gray-700 hover:bg-gray-600 text-gray-200 text-base flex items-center justify-center transition-colors"
@@ -1804,8 +1804,8 @@ function PrintStorePicker({ stores, lastStoreId, onPick, onClose }) {
               🛒
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-base font-semibold leading-tight">Koko lista</p>
-              <p className="text-gray-400 text-xs mt-0.5">Tulosta kaikki suodattamatta</p>
+              <p className="text-white text-base font-semibold leading-tight">Whole list</p>
+              <p className="text-gray-400 text-xs mt-0.5">Print everything, unfiltered</p>
             </div>
           </button>
           {stores.map((s) => (
@@ -1927,7 +1927,7 @@ function ShoppingListOverlay({
       ));
       setBundleDetail(detail);
     } catch {
-      onToast?.('Setin lataus epäonnistui', 'error');
+      onToast?.('Failed to load set', 'error');
     }
   }, [onToast]);
   const toggleBundleItem = useCallback((pid) => {
@@ -2108,7 +2108,7 @@ function ShoppingListOverlay({
   const [printing, setPrinting] = useState(false);
   // store = null prints the whole list (old behavior, and what the HA
   // ha_print.shopping_list service keeps doing); a store object filters to
-  // what that store carries. Unknowns land in a trailing "Ei tietoa" aisle
+  // what that store carries. Unknowns land in a trailing "Unknown" aisle
   // so nothing silently disappears from a paper list.
   const handlePrint = useCallback(async (store) => {
     if (printing) return;
@@ -2134,21 +2134,21 @@ function ShoppingListOverlay({
         }
         if (kept.length > 0) outAisles.push({ label: bucket.label, items: kept });
       }
-      if (unknownItems.length > 0) outAisles.push({ label: 'Ei tietoa', items: unknownItems });
+      if (unknownItems.length > 0) outAisles.push({ label: 'Unknown', items: unknownItems });
       if (outAisles.length === 0) {
-        onToast?.('Ei tulostettavaa tälle kaupalle', 'error');
+        onToast?.('Nothing to print for this store', 'error');
         return;
       }
       const payload = {
         aisles: outAisles,
         done_filter: 'strike',
-        ...(store ? { title: `Ostoslista — ${store.name}` } : {}),
+        ...(store ? { title: `Shopping list — ${store.name}` } : {}),
       };
       const r = await axios.post(`${PRINT_API}/print/shopping-list`, payload);
-      onToast?.(`Tulostettu (${r.data.items_printed ?? 0})`, 'success');
+      onToast?.(`Printed (${r.data.items_printed ?? 0})`, 'success');
     } catch (err) {
-      const msg = err?.response?.data?.detail || err?.message || 'tuntematon virhe';
-      onToast?.(`Tulostus epäonnistui: ${msg}`, 'error');
+      const msg = err?.response?.data?.detail || err?.message || 'unknown error';
+      onToast?.(`Print failed: ${msg}`, 'error');
     } finally {
       setPrinting(false);
     }
@@ -2178,17 +2178,17 @@ function ShoppingListOverlay({
           className="px-3 h-9 rounded-full bg-gray-700 hover:bg-gray-600 text-sm font-medium"
           aria-label="Close shopping list"
         >
-          ← Sulje
+          ← Close
         </button>
         <h1 className="text-lg font-bold tracking-tight flex-1 truncate">
-          🛒 Ostoslista
+          🛒 Shopping list
         </h1>
         <button
           onClick={() => setPrintPickerOpen(true)}
           disabled={printing || (list || []).length === 0}
           className="px-3 h-9 rounded-full bg-gray-700 hover:bg-brand-cobalt disabled:opacity-40 disabled:hover:bg-gray-700 text-xs font-semibold"
-          title="Tulosta kuittipaperille"
-          aria-label="Tulosta"
+          title="Print on receipt paper"
+          aria-label="Print"
         >
           {printing ? '…' : '🖨'}
         </button>
@@ -2204,9 +2204,9 @@ function ShoppingListOverlay({
           <button
             onClick={onClearDone}
             className="px-3 h-9 rounded-full bg-gray-700 hover:bg-red-600 text-xs font-semibold"
-            title="Tyhjennä valmiit"
+            title="Clear done items"
           >
-            Tyhjennä ({doneCount})
+            Clear ({doneCount})
           </button>
         )}
       </header>
@@ -2223,7 +2223,7 @@ function ShoppingListOverlay({
       {estimatedTotal > 0 && (
         <div
           className="px-4 pt-2 text-right text-sm font-semibold text-gray-400"
-          title="Arvioitu kokonaishinta Storageen tallennetuista hinnoista"
+          title="Estimated total from the prices stored in Storage"
         >
           ~{Math.round(estimatedTotal)}€
         </div>
@@ -2237,9 +2237,9 @@ function ShoppingListOverlay({
         {(list || []).length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <p className="text-5xl mb-3" aria-hidden="true">🧺</p>
-            <p className="text-lg">Ostoslista on tyhjä.</p>
+            <p className="text-lg">The shopping list is empty.</p>
             <p className="text-sm mt-2 text-gray-600">
-              Etsi tuote yltä ja lisää listalle.
+              Search for a product above to add it.
             </p>
           </div>
         ) : (
@@ -2282,17 +2282,17 @@ function ShoppingListOverlay({
           <div className="mt-8 flex items-center gap-3" aria-hidden="true">
             <div className="flex-1 border-t-2 border-gray-600" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
-              Lista päättyy tähän
+              End of list
             </span>
             <div className="flex-1 border-t-2 border-gray-600" />
           </div>
         )}
 
-        {/* Setit — quick-add bundles managed in HA-recipes */}
+        {/* Sets — quick-add bundles managed in HA-recipes */}
         {(bundles || []).length > 0 && (
           <section className="mt-6">
             <h2 className="text-xs font-bold uppercase tracking-wider text-brand-orange/90 px-1 pb-1 border-b border-gray-700/60 mb-2">
-              🧺 Setit
+              🧺 Sets
             </h2>
             <div className="flex gap-2 overflow-x-auto scrollbar-hide px-1 py-1">
               {bundles.map((b) => (
@@ -2309,14 +2309,14 @@ function ShoppingListOverlay({
           </section>
         )}
 
-        {/* Suositukset — recently fully-consumed products not kept in stock */}
+        {/* Recommendations — recently fully-consumed products not kept in stock */}
         {(recommendations || []).length > 0 && (
           <section className="mt-6">
             <h2 className="text-xs font-bold uppercase tracking-wider text-brand-orange/90 px-1 pb-1 border-b border-gray-700/60 mb-2">
-              💡 Suositukset
+              💡 Recommendations
             </h2>
             <p className="text-xs text-gray-500 px-1 mb-2">
-              Viimeksi loppuunkulutetut tuotteet. Lisää listalle yhdellä napautuksella.
+              Recently used up products. Tap one to add it to the list.
             </p>
             <ul className="space-y-2">
               {recommendations.map((p) => (
@@ -2334,7 +2334,7 @@ function ShoppingListOverlay({
                       <p className="text-white text-sm font-medium truncate">
                         {p.name}
                       </p>
-                      <p className="text-gray-500 text-xs">Loppu varastosta</p>
+                      <p className="text-gray-500 text-xs">Out of stock</p>
                     </div>
                     <span className="text-brand-cobalt-300 text-xl font-bold" aria-hidden="true">＋</span>
                   </button>
@@ -2344,23 +2344,23 @@ function ShoppingListOverlay({
           </section>
         )}
 
-        {/* Ehdotus — predictive proposal based on consumption velocity */}
+        {/* Suggestion — predictive proposal based on consumption velocity */}
         {(proposal || []).length > 0 && (
           <section className="mt-6 mb-2 bg-gray-800/60 border border-brand-cobalt/40 rounded-2xl p-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-brand-cobalt-300">
-                💡 Ehdotus
+                💡 Suggestion
               </h2>
               <button
                 type="button"
                 onClick={onDismissProposal}
                 className="text-xs text-gray-400 hover:text-gray-200 px-2 py-1 rounded-lg hover:bg-gray-700"
               >
-                Hylkää
+                Reject
               </button>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-              Tuotteet, jotka kulutuksen perusteella loppuvat pian.
+              Products that will run out soon at the current rate of use.
             </p>
             <ul className="space-y-1.5">
               {(proposal || []).map((p) => {
@@ -2375,14 +2375,14 @@ function ShoppingListOverlay({
                       checked={checked}
                       onChange={() => toggleProposalSelection(p.product_id)}
                       className="h-4 w-4 accent-brand-cobalt"
-                      aria-label={`Valitse ${p.product_name}`}
+                      aria-label={`Select ${p.product_name}`}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium truncate">
                         {p.product_name}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
-                        Menekki: {fmtQty(p.weekly_rate)}/vk | Varastossa: {fmtQty(p.current_qty)} | Osta: {fmtQty(p.suggested_amount)} lisää
+                        Use: {fmtQty(p.weekly_rate)}/wk | In stock: {fmtQty(p.current_qty)} | Buy: {fmtQty(p.suggested_amount)} more
                       </p>
                     </div>
                     <span
@@ -2393,7 +2393,7 @@ function ShoppingListOverlay({
                           : 'bg-amber-900/40 text-amber-300')
                       }
                     >
-                      {Math.max(0, Math.round(p.days_to_zero))} pv
+                      in {Math.max(0, Math.round(p.days_to_zero))} d
                     </span>
                   </li>
                 );
@@ -2409,29 +2409,29 @@ function ShoppingListOverlay({
                 }
                 className="px-3 h-9 rounded-xl bg-brand-cobalt hover:bg-brand-cobalt/90 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold transition-colors"
               >
-                Lisää valitut
+                Add selected
               </button>
             </div>
           </section>
         )}
 
-        {/* Toistuvat ostokset — products due for restock by purchase cadence */}
+        {/* Recurring purchases — products due for restock by purchase cadence */}
         {(cadenceSuggestions || []).length > 0 && (
           <section className="mt-6 mb-2 bg-gray-800/60 border border-brand-cobalt/40 rounded-2xl p-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-xs font-bold uppercase tracking-wider text-brand-cobalt-300">
-                🔁 Toistuvat ostokset
+                🔁 Recurring purchases
               </h2>
               <button
                 type="button"
                 onClick={onDismissCadence}
                 className="text-xs text-gray-400 hover:text-gray-200 px-2 py-1 rounded-lg hover:bg-gray-700"
               >
-                Hylkää
+                Reject
               </button>
             </div>
             <p className="text-xs text-gray-400 mb-2">
-              Tuotteet, joiden ostoväli on täyttymässä.
+              Products that are due by their usual purchase interval.
             </p>
             <ul className="space-y-1.5">
               {(cadenceSuggestions || []).map((c) => {
@@ -2447,14 +2447,14 @@ function ShoppingListOverlay({
                       checked={checked}
                       onChange={() => toggleCadenceSelection(c.product_id)}
                       className="h-4 w-4 accent-brand-cobalt"
-                      aria-label={`Valitse ${c.product_name}`}
+                      aria-label={`Select ${c.product_name}`}
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-white font-medium truncate">
                         {c.product_name}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
-                        {c.reasoning} | Osta: {fmtQty(c.suggested_amount)} lisää
+                        {c.reasoning} | Buy: {fmtQty(c.suggested_amount)} more
                       </p>
                     </div>
                     <span
@@ -2466,8 +2466,8 @@ function ShoppingListOverlay({
                       }
                     >
                       {overdue
-                        ? 'myöhässä'
-                        : `≈ ${Math.max(0, Math.round(c.days_until_expected))} pv`}
+                        ? 'overdue'
+                        : `in ≈${Math.max(0, Math.round(c.days_until_expected))} d`}
                     </span>
                   </li>
                 );
@@ -2483,7 +2483,7 @@ function ShoppingListOverlay({
                 }
                 className="px-3 h-9 rounded-xl bg-brand-cobalt hover:bg-brand-cobalt/90 disabled:bg-gray-700 disabled:text-gray-500 text-white text-sm font-semibold transition-colors"
               >
-                Lisää valitut
+                Add selected
               </button>
             </div>
           </section>
@@ -2503,13 +2503,13 @@ function ShoppingListOverlay({
               {bundleDetail.emoji || '🧺'} {bundleDetail.name}
             </h3>
             <p className="text-gray-400 text-sm text-center mb-4">
-              Valitse mitkä tuotteet lisätään listalle.
+              Choose which products to add to the list.
             </p>
             <ul className="space-y-1 mb-5">
               {(bundleDetail.items || []).map((item) => {
                 const checked = !bundleUnchecked.has(item.product_id);
-                const hint = item.on_list ? 'jo listalla'
-                  : item.stock_amount > 0 ? 'varastossa' : '';
+                const hint = item.on_list ? 'on the list'
+                  : item.stock_amount > 0 ? 'in stock' : '';
                 return (
                   <li key={item.id}>
                     <button
@@ -2549,7 +2549,7 @@ function ShoppingListOverlay({
                 }
                 className="w-full py-3 rounded-xl font-semibold text-white text-sm bg-brand-cobalt hover:bg-brand-cobalt-400 active:bg-brand-cobalt-600 disabled:opacity-40 transition-colors"
               >
-                {bundleBusy ? 'Lisätään…' : 'Lisää listalle'}
+                {bundleBusy ? 'Adding…' : 'Add to list'}
               </button>
               <button
                 type="button"
@@ -2557,7 +2557,7 @@ function ShoppingListOverlay({
                 disabled={bundleBusy}
                 className="w-full py-2 rounded-xl font-semibold text-gray-400 text-sm hover:text-gray-200 transition-colors"
               >
-                Peruuta
+                Cancel
               </button>
             </div>
           </div>
@@ -2596,7 +2596,7 @@ function UseSoonOverlay({
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     // Aggregate lots by (product_id, best_before_date) so e.g. three bread lots
-    // all expiring on the same day collapse into one row showing "3 · vanhenee X"
+    // all expiring on the same day collapse into one row showing "3 · expires X"
     // instead of three identical lines. The tap target is per-product anyway.
     // Dedup by lot id first — defensive against any caller that unions overlapping
     // /stock/entries responses (we no longer do, but stock entries with the same
@@ -2642,10 +2642,10 @@ function UseSoonOverlay({
   };
 
   const badgeText = (days) => {
-    if (days < 0) return `${Math.abs(days)} pv sitten`;
-    if (days === 0) return 'Tänään';
-    if (days === 1) return 'Huomenna';
-    return `${days} pv`;
+    if (days < 0) return `${Math.abs(days)} d ago`;
+    if (days === 0) return 'Today';
+    if (days === 1) return 'Tomorrow';
+    return `in ${days} d`;
   };
 
   return (
@@ -2657,12 +2657,12 @@ function UseSoonOverlay({
         <button
           onClick={onClose}
           className="px-3 h-9 rounded-full bg-gray-700 hover:bg-gray-600 text-sm font-medium"
-          aria-label="Sulje"
+          aria-label="Close"
         >
-          ← Sulje
+          ← Close
         </button>
         <h1 className="text-lg font-bold tracking-tight flex-1 truncate">
-          ⏳ Käytä pian
+          ⏳ Use soon
         </h1>
       </header>
       <main
@@ -2672,9 +2672,9 @@ function UseSoonOverlay({
         {rows.length === 0 ? (
           <div className="text-center py-16 text-gray-500">
             <p className="text-5xl mb-3" aria-hidden="true">✨</p>
-            <p className="text-lg">Mikään ei vanhene heti.</p>
+            <p className="text-lg">Nothing expires soon.</p>
             <p className="text-sm mt-2 text-gray-600">
-              Tällä viikolla ei ole päiväyksiä huolettavaksi.
+              No dates to worry about this week.
             </p>
           </div>
         ) : (
@@ -2692,10 +2692,10 @@ function UseSoonOverlay({
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">
-                      {row.product?.name ?? `Tuote #${row.product_id}`}
+                      {row.product?.name ?? `Product #${row.product_id}`}
                     </p>
                     <p className="text-gray-500 text-xs truncate">
-                      {row.amount} · vanhenee {row.best_before_date}
+                      {row.amount} · expires {row.best_before_date}
                     </p>
                   </div>
                   <span
@@ -2744,7 +2744,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
   const handleFile = useCallback(async (file) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      setError('Valitse kuvatiedosto.');
+      setError('Choose an image file.');
       return;
     }
     setError(null);
@@ -2782,11 +2782,11 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
       const detail = err?.response?.data?.detail || err?.response?.data?.error || err.message;
       const status = err?.response?.status;
       if (status === 503) {
-        setError(`AI ei ole määritetty: ${detail}`);
+        setError(`AI is not configured: ${detail}`);
       } else if (status === 502) {
-        setError(`Kuitin luku epäonnistui: ${detail}`);
+        setError(`Failed to read the receipt: ${detail}`);
       } else {
-        setError(detail || 'Kuvan käsittely epäonnistui.');
+        setError(detail || 'Failed to process the image.');
       }
       setPhase('pick');
     }
@@ -2804,7 +2804,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
         note: 'receipt',
       }));
     if (linesToCommit.length === 0) {
-      setError('Valitse vähintään yksi rivi.');
+      setError('Select at least one line.');
       return;
     }
     setError(null);
@@ -2814,11 +2814,11 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
         lines: linesToCommit,
       });
       const body = resp.data;
-      onToast?.(`🧾 ${body.added} riviä lisätty${body.failed ? ` (${body.failed} virhe)` : ''}`, body.failed ? 'error' : 'success');
+      onToast?.(`🧾 ${body.added} line${body.added === 1 ? '' : 's'} added${body.failed ? ` (${body.failed} failed)` : ''}`, body.failed ? 'error' : 'success');
       onCommitted?.(body.added || 0);
       onClose?.();
     } catch (err) {
-      setError(err?.response?.data?.detail ?? 'Lisäys epäonnistui.');
+      setError(err?.response?.data?.detail ?? 'Failed to add.');
       setPhase('review');
     }
   }, [parsed, overrides, onCommitted, onClose, onToast]);
@@ -2837,10 +2837,10 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
           onClick={onClose}
           className="px-3 h-9 rounded-full bg-gray-700 hover:bg-gray-600 text-sm font-medium"
         >
-          ← Sulje
+          ← Close
         </button>
         <h1 className="text-lg font-bold tracking-tight flex-1 truncate">
-          🧾 Skannaa kuitti
+          🧾 Scan receipt
         </h1>
       </header>
 
@@ -2855,10 +2855,10 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
           <div className="text-center py-8">
             <p className="text-5xl mb-4" aria-hidden="true">📸</p>
             <p className="text-gray-300 mb-6">
-              Valitse kuitin kuva tai ota uusi. AI lukee tuoterivit ja ehdottaa täsmäystä.
+              Choose a photo of the receipt or take a new one. AI reads the lines and suggests matching products.
             </p>
             <label className="inline-block px-5 py-3 bg-brand-cobalt hover:bg-brand-cobalt-400 rounded-xl text-white font-semibold cursor-pointer">
-              Valitse kuva
+              Choose image
               <input
                 type="file"
                 accept="image/*"
@@ -2873,16 +2873,16 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
         {phase === 'parsing' && (
           <div className="text-center py-12 text-gray-400">
             <p className="text-4xl mb-3 animate-pulse" aria-hidden="true">🔍</p>
-            <p>Luetaan kuittia…</p>
+            <p>Reading receipt…</p>
           </div>
         )}
 
         {(phase === 'review' || phase === 'committing') && parsed && (
           <>
             <div className="mb-3 text-xs text-gray-400">
-              {parsed.store !== 'unknown' && <>Kauppa: {parsed.store} · </>}
-              {parsed.date && <>Päivä: {parsed.date} · </>}
-              {(parsed.lines || []).length} riviä luettu
+              {parsed.store !== 'unknown' && <>Store: {parsed.store} · </>}
+              {parsed.date && <>Date: {parsed.date} · </>}
+              {(parsed.lines || []).length} lines read
             </div>
             <ul className="space-y-2">
               {(parsed.lines || []).map((line, idx) => {
@@ -2904,16 +2904,16 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
                         checked={!ov.ignored}
                         onChange={(e) => setLineField(idx, { ignored: !e.target.checked })}
                         className="h-4 w-4 accent-brand-cobalt"
-                        aria-label={`Sisällytä rivi ${idx + 1}`}
+                        aria-label={`Include line ${idx + 1}`}
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-white font-medium truncate">
-                          {matchedProduct?.name ?? '(ei täsmäystä — ohitetaan)'}
+                          {matchedProduct?.name ?? '(no match — skipped)'}
                         </p>
                         <p className="text-xs text-gray-500 truncate">
                           {line.raw_text}
                           {line.confidence > 0 && (
-                            <> · {Math.round(line.confidence * 100)}% varma</>
+                            <> · {Math.round(line.confidence * 100)}% sure</>
                           )}
                         </p>
                       </div>
@@ -2938,7 +2938,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
                 disabled={phase === 'committing'}
                 className="px-3 h-9 rounded-xl bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold"
               >
-                Peruuta
+                Cancel
               </button>
               <button
                 type="button"
@@ -2946,7 +2946,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
                 disabled={phase === 'committing'}
                 className="px-4 h-9 rounded-xl bg-brand-cobalt hover:bg-brand-cobalt-400 disabled:bg-gray-700 text-white text-sm font-semibold"
               >
-                {phase === 'committing' ? 'Lisätään…' : 'Lisää varastoon'}
+                {phase === 'committing' ? 'Adding…' : 'Add to stock'}
               </button>
             </div>
           </>
@@ -3053,7 +3053,7 @@ function ShoppingQuickAdd({
     const fail = (err) => {
       if (cancelled || myId !== reqIdRef.current) return;
       setScraperError(
-        err?.response?.data?.detail ?? err?.message ?? 'Haku epäonnistui',
+        err?.response?.data?.detail ?? err?.message ?? 'Search failed',
       );
       setScraperResults([]);
       setScraperLoading(false);
@@ -3067,7 +3067,7 @@ function ShoppingQuickAdd({
     const pollOnce = (taskId) => {
       if (cancelled || myId !== reqIdRef.current) return;
       if (Date.now() > pollDeadline) {
-        fail(new Error('Aikakatkaisu'));
+        fail(new Error('Timed out'));
         return;
       }
       axios
@@ -3078,7 +3078,7 @@ function ShoppingQuickAdd({
           if (status === 'done' || status === 'completed' || status === 'success') {
             finish(res.data);
           } else if (status === 'error' || status === 'failed') {
-            fail(new Error(res.data?.error ?? 'Haku epäonnistui'));
+            fail(new Error(res.data?.error ?? 'Search failed'));
           } else {
             pollTimer = setTimeout(() => pollOnce(taskId), POLL_INTERVAL);
           }
@@ -3167,7 +3167,7 @@ function ShoppingQuickAdd({
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Etsi tai lisää tuote…"
+          placeholder="Search or add a product…"
           className="w-full h-11 pl-10 pr-10 rounded-xl bg-gray-700 text-white placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-brand-orange/60"
           autoComplete="off"
           inputMode="search"
@@ -3177,7 +3177,7 @@ function ShoppingQuickAdd({
           <button
             onClick={reset}
             className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 text-gray-400 hover:text-white text-sm"
-            aria-label="Tyhjennä haku"
+            aria-label="Clear search"
           >
             ✕
           </button>
@@ -3189,7 +3189,7 @@ function ShoppingQuickAdd({
           {/* Local product hits */}
           {localResults.length > 0 && (
             <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider font-semibold text-gray-400">
-              Omat tuotteet
+              My products
             </div>
           )}
           {localResults.map((p) => (
@@ -3207,12 +3207,12 @@ function ShoppingQuickAdd({
                   {p.name}
                   {p.kind === 'concept' && (
                     <span className="ml-2 align-middle text-[10px] font-semibold px-1.5 py-0.5 rounded-lg bg-gray-700 text-gray-300">
-                      yleinen
+                      generic
                     </span>
                   )}
                 </p>
                 <p className="text-xs text-gray-400 truncate">
-                  {p.product_group_id != null ? '' : 'Ei ryhmää'}
+                  {p.product_group_id != null ? '' : 'No group'}
                 </p>
               </div>
               <span className="text-emerald-400 text-lg" aria-hidden="true">＋</span>
@@ -3227,7 +3227,7 @@ function ShoppingQuickAdd({
               <div className="px-3 pt-2 pb-1 flex items-center gap-2 text-[10px] uppercase tracking-wider font-semibold text-blue-300">
                 <span>K-Ruoka</span>
                 {scraperLoading && (
-                  <span className="text-gray-400 normal-case tracking-normal">— etsitään…</span>
+                  <span className="text-gray-400 normal-case tracking-normal">— searching…</span>
                 )}
               </div>
               {!scraperLoading && scraperResults.map((sp, idx) => (
@@ -3251,7 +3251,7 @@ function ShoppingQuickAdd({
               ))}
               {!scraperLoading && scraperResults.length === 0 && (
                 <p className="px-3 py-2 text-xs text-gray-500">
-                  {scraperError ?? 'Ei osumia K-Ruoasta.'}
+                  {scraperError ?? 'No results from K-Ruoka.'}
                 </p>
               )}
             </div>
@@ -3267,9 +3267,9 @@ function ShoppingQuickAdd({
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm text-white font-medium truncate">
-                Lisää muistilappuna: "{query.trim() || '…'}"
+                Add as note: "{query.trim() || '…'}"
               </p>
-              <p className="text-xs text-gray-400">Vapaa teksti listalle</p>
+              <p className="text-xs text-gray-400">Free text on the list</p>
             </div>
             <span className="text-emerald-400 text-lg" aria-hidden="true">＋</span>
           </button>
@@ -3303,11 +3303,11 @@ function ShoppingListRow({
   const face = shown ?? product;
   const name = face?.name ?? item.ha_item_name ?? `#${item.product_id}`;
   const nameShown = !!face && face.id !== item.product_id;
-  // Kept-in-stock items that ran fully out get a red "Loppu" badge; otherwise
-  // the auto-added (below-threshold) badge stays amber "Vähissä".
+  // Kept-in-stock items that ran fully out get a red "Out of stock" badge;
+  // otherwise the auto-added (below-threshold) badge stays amber "Low".
   const outOfStock = parseFloat(stockAmount ?? 0) <= 0;
   const isNote = product?.name === NOTE_SENTINEL_NAME;
-  const displayName = isNote ? (item.note || 'Muistilappu') : name;
+  const displayName = isNote ? (item.note || 'Note') : name;
   const context = isNote ? '' : rowContext(item, product, face);
   const imgUrl = isNote ? null : pictureUrl(face?.picture_filename);
   const availableStores = isNote ? [] : (face?.stores || []).filter((s) => s.available);
@@ -3334,7 +3334,7 @@ function ShoppingListRow({
         <button
           onClick={handleDec}
           className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-          aria-label={isRequirementRow(item) ? 'Yksi pakkaus vähemmän' : 'Vähennä'}
+          aria-label={isRequirementRow(item) ? 'One package less' : 'Decrease'}
         >
           −
         </button>
@@ -3344,7 +3344,7 @@ function ShoppingListRow({
         <button
           onClick={handleInc}
           className="w-7 h-7 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-base leading-none"
-          aria-label={isRequirementRow(item) ? 'Yksi pakkaus lisää' : 'Lisää'}
+          aria-label={isRequirementRow(item) ? 'One package more' : 'Increase'}
         >
           +
         </button>
@@ -3360,10 +3360,10 @@ function ShoppingListRow({
               ? 'bg-gray-700 ring-1 ring-inset ring-brand-orange'
               : 'grayscale opacity-40 hover:opacity-100 hover:grayscale-0 hover:bg-gray-700'
           }`}
-          aria-label={item.pinned ? 'Salli mikä tahansa merkki' : 'Lukitse tähän merkkiin'}
+          aria-label={item.pinned ? 'Allow any brand' : 'Lock to this brand'}
           title={item.pinned
-            ? 'Vain tämä tuote täyttää — mikä tahansa merkki ei kelpaa'
-            : 'Mikä tahansa saman tyypin merkki täyttää tämän'}
+            ? 'Only this product ticks it off — other brands do not count'
+            : 'Any brand of the same type ticks this off'}
         >
           📌
         </button>
@@ -3382,7 +3382,7 @@ function ShoppingListRow({
               ? 'bg-emerald-500 border-emerald-500 text-white'
               : 'border-gray-500 text-transparent hover:border-emerald-400'
           }`}
-          aria-label={item.done ? 'Merkitse tekemättömäksi' : 'Merkitse valmiiksi'}
+          aria-label={item.done ? 'Mark as not done' : 'Mark as done'}
         >
           ✓
         </button>
@@ -3403,11 +3403,11 @@ function ShoppingListRow({
             {item.auto_added ? (
               outOfStock ? (
                 <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 border border-red-500/40">
-                  Loppu
+                  Out of stock
                 </span>
               ) : (
                 <span className="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40">
-                  Vähissä
+                  Low
                 </span>
               )
             ) : null}
@@ -3439,8 +3439,8 @@ function ShoppingListRow({
         <button
           onClick={() => onDeleteItem(item)}
           className="w-7 h-7 flex-shrink-0 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-500/10"
-          aria-label="Poista"
-          title="Poista"
+          aria-label="Remove"
+          title="Remove"
         >
           🗑
         </button>
@@ -3485,7 +3485,7 @@ function ShoppingListRow({
                     ? 'bg-brand-orange/80 text-white'
                     : 'bg-gray-700/70 hover:bg-brand-orange/80 text-gray-200 hover:text-white'
                 }`}
-                title={`Osta tämä: ${child.name}`}
+                title={`Buy this: ${child.name}`}
               >
                 {child.name}
               </button>
@@ -3568,7 +3568,7 @@ export default function App() {
   // shopping overlay opens. Cleared when the user dismisses the panel.
   const [shoppingProposal, setShoppingProposal] = useState([]);
   const [cadenceSuggestions, setCadenceSuggestions] = useState([]);
-  // Near-expiry stock entries — refetched when the Käytä pian overlay opens
+  // Near-expiry stock entries — refetched when the Use soon overlay opens
   // and when the main stock data refreshes, so the header badge stays current.
   const [useSoonEntries, setUseSoonEntries] = useState([]);
   const [showUseSoon, setShowUseSoon] = useState(false);
@@ -3767,7 +3767,7 @@ export default function App() {
     return () => { cancelled = true; };
   }, [showShoppingList]);
 
-  // ---- Near-expiry stock entries → ⏳ Käytä pian header badge + overlay -----
+  // ---- Near-expiry stock entries → ⏳ Use soon header badge + overlay -----
   // Single call to /stock/entries?expiring_within_days=N — as of HA-Storage 0.9.4
   // this filter has no lower bound, so already-expired lots are included.
   // Refetched on app load, when the overlay opens, and whenever stockItems
@@ -3825,7 +3825,7 @@ export default function App() {
 
   // Current stock per product (stockItems is already filtered to amount > 0, so
   // a product missing here is at zero stock). Drives the shopping-list
-  // "Loppu" vs "Vähissä" badge.
+  // "Out of stock" vs "Low" badge.
   const stockByProduct = useMemo(() => {
     const m = new Map();
     for (const it of stockItems || []) m.set(it.product_id, parseFloat(it.amount ?? 0));
@@ -4199,7 +4199,7 @@ export default function App() {
           );
           const taskId = start.data?.task_id;
           if (!taskId) return;
-          addToast('🤖 AI luokittelee tuotetta…', 'info');
+          addToast('🤖 AI is classifying the product…', 'info');
           const deadline = Date.now() + 90_000;
           // eslint-disable-next-line no-await-in-loop
           while (Date.now() < deadline) {
@@ -4217,11 +4217,11 @@ export default function App() {
                 } catch {
                   // Non-fatal — UI will pick up on the next poll cycle.
                 }
-                addToast('✅ AI valmis', 'success');
+                addToast('✅ AI done', 'success');
                 return;
               }
               if (status === 'error') {
-                addToast('AI-luokittelu epäonnistui.', 'error');
+                addToast('AI classification failed.', 'error');
                 return;
               }
             } catch (err) {
@@ -5127,7 +5127,7 @@ export default function App() {
             : [normalized, ...next];
         });
         try { navigator.vibrate?.(30); } catch {}
-        addToast(`🛒 ${product.name ?? 'Tuote'} listalle`, 'success');
+        addToast(`🛒 ${product.name ?? 'Product'} added to shopping list`, 'success');
       } catch (err) {
         setShoppingList((prev) =>
           mergedIntoId != null
@@ -5137,7 +5137,7 @@ export default function App() {
             : prev.filter((row) => row.id !== tempId),
         );
         addToast(
-          err?.response?.data?.detail ?? 'Lisäys epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to add.',
           'error',
         );
       } finally {
@@ -5192,7 +5192,7 @@ export default function App() {
     async (scraperProduct) => {
       if (!scraperProduct) return;
       const ean = (scraperProduct.ean || '').trim();
-      const name = scraperProduct.name || 'Tuote';
+      const name = scraperProduct.name || 'Product';
 
       // Shopping-list adds must NEVER route through the scraper's discover
       // pipeline: that flow's `_discover_single_barcode` always adds +1 to
@@ -5209,7 +5209,7 @@ export default function App() {
       // Falls back to a bare-bones direct create if the scraper is offline.
       pendingMutations.current++;
       if (scraperAvailable) {
-        addToast(`🔎 Lisätään: ${name}…`, 'info');
+        addToast(`🔎 Adding: ${name}…`, 'info');
       }
       try {
         let createdProduct = null;
@@ -5256,7 +5256,7 @@ export default function App() {
                   break;
                 }
                 if (status === 'error' || status === 'failed') {
-                  throw new Error(r.data?.error ?? 'Tuotteen luonti epäonnistui.');
+                  throw new Error(r.data?.error ?? 'Failed to create the product.');
                 }
               } catch (err) {
                 if (err?.response?.status !== 404) throw err;
@@ -5264,7 +5264,7 @@ export default function App() {
               }
             }
             if (result?.task_id && result?.status !== 'done') {
-              throw new Error('Aikakatkaisu');
+              throw new Error('Timed out');
             }
           }
 
@@ -5272,7 +5272,7 @@ export default function App() {
             throw new Error(
               (Array.isArray(result.errors) && result.errors[0]) ||
                 result.error ||
-                'Tuotteen luonti epäonnistui.',
+                'Failed to create the product.',
             );
           }
 
@@ -5334,7 +5334,7 @@ export default function App() {
         if (createdProduct?.id) triggerAiOptimize(createdProduct.id);
       } catch (err) {
         addToast(
-          err?.response?.data?.detail ?? err?.message ?? 'Lisäys epäonnistui.',
+          err?.response?.data?.detail ?? err?.message ?? 'Failed to add.',
           'error',
         );
       } finally {
@@ -5357,7 +5357,7 @@ export default function App() {
     // Otherwise create it
     const resp = await axios.post(`${API_BASE}/products`, {
       name: NOTE_SENTINEL_NAME,
-      description: 'Vapaa teksti ostoslistalla',
+      description: 'Free text on the shopping list',
       unit_id: (await getKplUnitId()) ?? 1,
     });
     const id = resp.data?.id;
@@ -5378,7 +5378,7 @@ export default function App() {
         );
       } catch (err) {
         addToast(
-          err?.response?.data?.detail ?? 'Muistilapun lisäys epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to add the note.',
           'error',
         );
       }
@@ -5403,7 +5403,7 @@ export default function App() {
           ),
         );
         addToast(
-          err?.response?.data?.detail ?? 'Päivitys epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to update.',
           'error',
         );
       } finally {
@@ -5436,7 +5436,7 @@ export default function App() {
           ),
         );
         addToast(
-          err?.response?.data?.detail ?? 'Päivitys epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to update.',
           'error',
         );
       } finally {
@@ -5457,7 +5457,7 @@ export default function App() {
       } catch (err) {
         setShoppingList((prev) => [removed, ...prev]);
         addToast(
-          err?.response?.data?.detail ?? 'Poisto epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to remove.',
           'error',
         );
       } finally {
@@ -5490,7 +5490,7 @@ export default function App() {
       } catch (err) {
         setShoppingList((prev) => prev.map((row) => (row.id === item.id ? previous : row)));
         addToast(
-          err?.response?.data?.detail ?? 'Päivitys epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to update.',
           'error',
         );
       } finally {
@@ -5507,12 +5507,12 @@ export default function App() {
     setShoppingList((prev) => prev.filter((row) => !row.done));
     try {
       await axios.delete(`${API_BASE}/shopping-list/done`);
-      addToast(`Tyhjennetty: ${doneItems.length} valmista`, 'success');
+      addToast(`Cleared ${doneItems.length} done`, 'success');
     } catch (err) {
       // Roll back by re-adding the cleared items
       setShoppingList((prev) => [...doneItems, ...prev]);
       addToast(
-        err?.response?.data?.detail ?? 'Tyhjennys epäonnistui.',
+        err?.response?.data?.detail ?? 'Failed to clear.',
         'error',
       );
     } finally {
@@ -5535,13 +5535,13 @@ export default function App() {
       }
       addToast(
         skipped > 0
-          ? `${added} lisätty, ${skipped} jo listalla`
-          : `${added} tuotetta lisätty listalle`,
+          ? `${added} added, ${skipped} already on the list`
+          : `${added} product${added === 1 ? '' : 's'} added to the list`,
         'success',
       );
       return true;
     } catch {
-      addToast('Setin lisäys epäonnistui', 'error');
+      addToast('Failed to add the set', 'error');
       return false;
     }
   }, [addToast]);
@@ -5560,10 +5560,10 @@ export default function App() {
         const [updated] = normalizeShoppingRows([resp.data]);
         setShoppingList((prev) => prev.map((row) => (row.id === item.id ? updated : row)));
         try { navigator.vibrate?.(30); } catch {}
-        addToast(`Ostetaan: ${child.name}`, 'success');
+        addToast(`Buying: ${child.name}`, 'success');
       } catch (err) {
         addToast(
-          err?.response?.data?.detail ?? 'Vaihto epäonnistui.',
+          err?.response?.data?.detail ?? 'Failed to switch.',
           'error',
         );
       } finally {
@@ -6375,11 +6375,11 @@ export default function App() {
               <button
                 onClick={() => setShowUseSoon(true)}
                 className="relative px-3 h-10 bg-gray-700 hover:bg-gray-600 active:bg-gray-500 rounded-full flex items-center gap-2 text-white text-sm font-semibold shadow transition-colors"
-                title="Käytä pian"
-                aria-label="Avaa Käytä pian"
+                title="Use soon"
+                aria-label="Open Use soon"
               >
                 <span aria-hidden="true">⏳</span>
-                <span className="hidden sm:inline">Käytä pian</span>
+                <span className="hidden sm:inline">Use soon</span>
                 {urgent > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-red-600 text-[11px] font-bold flex items-center justify-center">
                     {urgent > 99 ? '99+' : urgent}
@@ -6391,11 +6391,11 @@ export default function App() {
           <button
             onClick={() => setShowShoppingList(true)}
             className="relative px-3 h-10 bg-gray-700 hover:bg-gray-600 active:bg-gray-500 rounded-full flex items-center gap-2 text-white text-sm font-semibold shadow transition-colors"
-            title="Ostoslista"
-            aria-label="Avaa ostoslista"
+            title="Shopping list"
+            aria-label="Open shopping list"
           >
             <span aria-hidden="true">🛒</span>
-            <span className="hidden sm:inline">Ostoslista</span>
+            <span className="hidden sm:inline">Shopping list</span>
             {shoppingPendingCount > 0 && (
               <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-brand-orange text-[11px] font-bold flex items-center justify-center">
                 {shoppingPendingCount > 99 ? '99+' : shoppingPendingCount}
@@ -6418,8 +6418,8 @@ export default function App() {
           retries the Storage backend. Goes away automatically when sync recovers. */}
       {disconnected && (
         <div className="mx-4 mt-2 px-4 py-3 rounded-xl bg-amber-600/90 text-white text-sm font-medium flex items-center justify-between">
-          <span>📡 Offline — näytetään tallennettu tila</span>
-          <span className="text-xs opacity-80">Yhteys palautetaan…</span>
+          <span>📡 Offline — showing saved data</span>
+          <span className="text-xs opacity-80">Reconnecting…</span>
         </div>
       )}
 
@@ -6463,7 +6463,7 @@ export default function App() {
         {stockValue > 0 && (
           <div
             className="text-right text-sm font-semibold text-gray-400"
-            title="Arvioitu varaston arvo Storageen tallennetuista hinnoista"
+            title="Estimated stock value from the prices stored in Storage"
           >
             ~{Math.round(stockValue)}€
           </div>
@@ -6661,7 +6661,7 @@ export default function App() {
         />
       )}
 
-      {/* ── Käytä pian overlay ─────────────────────────────────────────── */}
+      {/* ── Use soon overlay ───────────────────────────────────────────── */}
       {showUseSoon && (
         <UseSoonOverlay
           entries={useSoonEntries}
