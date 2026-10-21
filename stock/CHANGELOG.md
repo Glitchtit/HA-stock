@@ -1,3 +1,7 @@
+## 2.14.5
+
+- A barcode scan right after the screen wakes from the screensaver no longer opens "Use soon" (or whichever button had keyboard focus); scans keep working without tapping the screen first
+
 ## 2.14.4
 
 - The whole interface is in English: the shopping list, Use soon, sets, suggestions, receipt scanning, badges and messages. Product, group and store names stay in Finnish
