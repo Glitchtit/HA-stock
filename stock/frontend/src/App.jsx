@@ -3,6 +3,7 @@ import axios from 'axios';
 import { Html5Qrcode } from 'html5-qrcode';
 import { HardwareScanInput } from './components/HardwareScanInput';
 import { groupCount, stockText } from './stockFormat.js';
+import { countsToKeep, inventoryAdjustments, scanUnits } from './inventoryCount.js';
 import ShoppingAttributionModal from './components/ShoppingAttributionModal';
 import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
@@ -3619,6 +3620,7 @@ export default function App() {
   const [inventoryCounts, setInventoryCounts] = useState({});
   const invLastBarcodeRef = useRef(null); // inventory-specific cooldown (avoids clashing with normal scan)
   const invLastTimeRef = useRef(0);
+  const invCommittingRef = useRef(false); // Finish in progress: ignore a second press
   const consumeLastBarcodeRef = useRef(null); // consume-specific camera cooldown
   const consumeLastTimeRef = useRef(0);
   // Hardware scan-mode auto-finish timer (cleared/reset by the central router).
@@ -4612,6 +4614,11 @@ export default function App() {
   // Accumulates per-product counts without touching stock immediately.
   const handleInventoryBarcodeScan = useCallback(
     async (barcode, { continuous = false, fromHardware = false } = {}) => {
+      // Finish resets the counts when it is done, so a scan now would be lost.
+      if (invCommittingRef.current) {
+        addToast('Saving the count — scan again in a moment', 'info');
+        return;
+      }
       // A hardware scanner debounces itself, so allow rapid repeat scans of the
       // same item; the cooldown only matters for the camera reader.
       const now = Date.now();
@@ -4653,10 +4660,11 @@ export default function App() {
       } else if (productKnown && foundProduct) {
         const pid = foundProduct.id;
         const name = foundProduct.name ?? barcode;
-        inventoryCountsRef.current[pid] = (inventoryCountsRef.current[pid] ?? 0) + 1;
+        const units = scanUnits(foundProduct);
+        inventoryCountsRef.current[pid] = (inventoryCountsRef.current[pid] ?? 0) + units;
         inventoryNamesRef.current[pid] = name;
         setInventoryCounts({ ...inventoryCountsRef.current });
-        addToast(`📋 ${name} × ${inventoryCountsRef.current[pid]}`, 'success');
+        addToast(`📋 ${name}${units > 1 ? ` (+${units})` : ''} × ${inventoryCountsRef.current[pid]}`, 'success');
         pushRecent(setInventoryRecents, foundProduct);
       } else {
         try {
@@ -4670,47 +4678,66 @@ export default function App() {
     [addToast, scraperAvailable, processDiscoverQueue, pushRecent],
   );
 
-  // Commits inventory deltas to Storage when the user presses Finish.
+  // Commits inventory deltas to Storage when the user presses Finish. Deltas
+  // are computed against stock fetched now, not the page's last load. When
+  // the fetch or an adjustment fails the scanner stays open with the counts
+  // that were not saved, so Finish can be pressed again.
   const handleInventoryClose = useCallback(
     async ({ scanned = 0 } = {}) => {
+      if (invCommittingRef.current) return;
       clearInactivityTimer();
-      setShowInventoryScanner(false);
       const counts = inventoryCountsRef.current;
       const countedPids = new Set(Object.keys(counts).map(Number));
+      let stockRows = stockItems;
 
       if (scanned > 0) {
-        // Build a quick lookup of current stock by product_id
-        const currentStock = {};
-        for (const item of stockItems) {
-          currentStock[item.product_id] = item.amount ?? 0;
-        }
-
-        const adjustments = [];
-        for (const [pidStr, counted] of Object.entries(counts)) {
-          const pid = Number(pidStr);
-          const current = currentStock[pid] ?? 0;
-          const delta = counted - current;
-          if (delta > 0) {
-            adjustments.push(axios.post(`${API_BASE}/stock/add`, { product_id: pid, amount: delta }));
-          } else if (delta < 0) {
-            adjustments.push(axios.post(`${API_BASE}/stock/consume`, { product_id: pid, amount: -delta }));
-          }
-        }
-
-        if (adjustments.length > 0) {
+        invCommittingRef.current = true;
+        try {
           try {
-            await Promise.all(adjustments);
-            addToast(`Inventory committed — ${adjustments.length} product(s) adjusted`, 'success');
-          } catch (err) {
-            addToast(err?.response?.data?.detail ?? 'Failed to commit inventory adjustments.', 'error');
+            const resp = await axios.get(`${API_BASE}/stock`);
+            stockRows = Array.isArray(resp.data) ? resp.data : [];
+          } catch {
+            addToast('Could not load current stock — your count is kept, press Finish to retry.', 'error');
+            return;
           }
-        } else {
-          addToast('Inventory complete — no adjustments needed', 'info');
+
+          const adjustments = inventoryAdjustments(counts, stockRows);
+          if (adjustments.length > 0) {
+            const results = await Promise.allSettled(adjustments.map(({ product_id, action, amount }) =>
+              axios.post(`${API_BASE}/stock/${action}`, { product_id, amount })));
+            const keep = countsToKeep(counts, adjustments, results);
+            const failed = Object.keys(keep).length;
+            if (failed > 0) {
+              // Keep only what was not saved, so a retry applies just that.
+              inventoryCountsRef.current = keep;
+              for (const pid of Object.keys(inventoryNamesRef.current)) {
+                if (!(pid in keep)) delete inventoryNamesRef.current[pid];
+              }
+              setInventoryCounts({ ...keep });
+              setInventoryRecents((prev) => prev.filter((r) => r.id in keep));
+              const err = results.find((r) => r.status === 'rejected')?.reason;
+              addToast(
+                `${err?.response?.data?.detail ?? 'Failed to save the count'} — ${failed} product(s) kept, press Finish to retry.`,
+                'error',
+              );
+              await refreshStock();
+              return;
+            }
+            addToast(`Inventory committed — ${adjustments.length} product(s) adjusted`, 'success');
+          } else {
+            addToast('Inventory complete — no adjustments needed', 'info');
+          }
+        } finally {
+          invCommittingRef.current = false;
         }
       }
 
+      setShowInventoryScanner(false);
+
       // Trigger incremental optimize for products in stock that weren't scanned
-      const unscannedInStock = stockItems.some((item) => !countedPids.has(item.product_id));
+      const unscannedInStock = stockRows.some(
+        (item) => parseFloat(item.amount) > 0 && !countedPids.has(item.product_id),
+      );
       if (unscannedInStock && scraperAvailable) {
         try {
           await axios.post(`${SCRAPER_API}/optimize`, { incremental: true });
@@ -4949,8 +4976,9 @@ export default function App() {
   const handleAdjustInventoryRecent = useCallback(
     (recent, delta) => {
       const pid = recent.id;
+      const step = recent.packSize ?? 1;
       const current = inventoryCountsRef.current[pid] ?? 0;
-      const next = current + delta;
+      const next = current + delta * step;
       if (next <= 0) {
         delete inventoryCountsRef.current[pid];
         delete inventoryNamesRef.current[pid];
@@ -4961,8 +4989,8 @@ export default function App() {
       adjustRecentCount(setInventoryRecents, pid, delta);
       addToast(
         delta > 0
-          ? `+1 ${recent.name} (${Math.max(next, 0)})`
-          : `−1 ${recent.name} (${Math.max(next, 0)})`,
+          ? `+${step} ${recent.name} (${Math.max(next, 0)})`
+          : `−${step} ${recent.name} (${Math.max(next, 0)})`,
         'success',
       );
     },
