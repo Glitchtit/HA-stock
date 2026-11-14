@@ -3621,6 +3621,7 @@ export default function App() {
   const invLastBarcodeRef = useRef(null); // inventory-specific cooldown (avoids clashing with normal scan)
   const invLastTimeRef = useRef(0);
   const invCommittingRef = useRef(false); // Finish in progress: ignore a second press
+  const invPendingScansRef = useRef(new Set()); // inventory scans still looking up their barcode
   const consumeLastBarcodeRef = useRef(null); // consume-specific camera cooldown
   const consumeLastTimeRef = useRef(0);
   // Hardware scan-mode auto-finish timer (cleared/reset by the central router).
@@ -4612,7 +4613,7 @@ export default function App() {
 
   // ---- Inventory scanner handlers ------------------------------------------
   // Accumulates per-product counts without touching stock immediately.
-  const handleInventoryBarcodeScan = useCallback(
+  const inventoryScan = useCallback(
     async (barcode, { continuous = false, fromHardware = false } = {}) => {
       // Finish resets the counts when it is done, so a scan now would be lost.
       if (invCommittingRef.current) {
@@ -4678,21 +4679,37 @@ export default function App() {
     [addToast, scraperAvailable, processDiscoverQueue, pushRecent],
   );
 
+  // Tracks each scan until its lookup is done, so Finish can wait for it.
+  const handleInventoryBarcodeScan = useCallback(
+    (barcode, opts) => {
+      const scan = inventoryScan(barcode, opts);
+      const done = () => invPendingScansRef.current.delete(scan);
+      invPendingScansRef.current.add(scan);
+      scan.then(done, done);
+      return scan;
+    },
+    [inventoryScan],
+  );
+
   // Commits inventory deltas to Storage when the user presses Finish. Deltas
   // are computed against stock fetched now, not the page's last load. When
   // the fetch or an adjustment fails the scanner stays open with the counts
-  // that were not saved, so Finish can be pressed again.
+  // that were not saved, so Finish can be pressed again. New scans are
+  // refused from the start of Finish until the counts are reset, and scans
+  // already looking up their barcode are waited for, so none is lost or
+  // carried into the next count.
   const handleInventoryClose = useCallback(
     async ({ scanned = 0 } = {}) => {
       if (invCommittingRef.current) return;
-      clearInactivityTimer();
-      const counts = inventoryCountsRef.current;
-      const countedPids = new Set(Object.keys(counts).map(Number));
-      let stockRows = stockItems;
+      invCommittingRef.current = true;
+      try {
+        clearInactivityTimer();
+        await Promise.allSettled([...invPendingScansRef.current]);
+        const counts = inventoryCountsRef.current;
+        const countedPids = new Set(Object.keys(counts).map(Number));
+        let stockRows = stockItems;
 
-      if (scanned > 0) {
-        invCommittingRef.current = true;
-        try {
+        if (scanned > 0) {
           try {
             const resp = await axios.get(`${API_BASE}/stock`);
             stockRows = Array.isArray(resp.data) ? resp.data : [];
@@ -4727,33 +4744,33 @@ export default function App() {
           } else {
             addToast('Inventory complete — no adjustments needed', 'info');
           }
-        } finally {
-          invCommittingRef.current = false;
         }
-      }
 
-      setShowInventoryScanner(false);
+        setShowInventoryScanner(false);
 
-      // Trigger incremental optimize for products in stock that weren't scanned
-      const unscannedInStock = stockRows.some(
-        (item) => parseFloat(item.amount) > 0 && !countedPids.has(item.product_id),
-      );
-      if (unscannedInStock && scraperAvailable) {
-        try {
-          await axios.post(`${SCRAPER_API}/optimize`, { incremental: true });
-          addToast('Running incremental optimize for unscanned products…', 'info');
-        } catch {
-          // Non-fatal — optimizer may already be running
+        // Trigger incremental optimize for products in stock that weren't scanned
+        const unscannedInStock = stockRows.some(
+          (item) => parseFloat(item.amount) > 0 && !countedPids.has(item.product_id),
+        );
+        if (unscannedInStock && scraperAvailable) {
+          try {
+            await axios.post(`${SCRAPER_API}/optimize`, { incremental: true });
+            addToast('Running incremental optimize for unscanned products…', 'info');
+          } catch {
+            // Non-fatal — optimizer may already be running
+          }
         }
-      }
 
-      // Reset inventory state
-      inventoryCountsRef.current = {};
-      inventoryNamesRef.current = {};
-      setInventoryCounts({});
-      setInventoryRecents([]);
-      invLastBarcodeRef.current = null;
-      invLastTimeRef.current = 0;
+        // Reset inventory state
+        inventoryCountsRef.current = {};
+        inventoryNamesRef.current = {};
+        setInventoryCounts({});
+        setInventoryRecents([]);
+        invLastBarcodeRef.current = null;
+        invLastTimeRef.current = 0;
+      } finally {
+        invCommittingRef.current = false;
+      }
 
       await refreshStock();
     },
