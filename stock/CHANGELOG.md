@@ -1,3 +1,10 @@
+## 2.14.6
+
+- Inventory: scanning a multipack barcode (e.g. a 6-pack) counts the whole pack, and the +/- on a counted product steps by that pack size
+- Inventory: Finish compares your count with the current stock, not the stock the page loaded earlier
+- Inventory: if saving the count fails, the scanner stays open with the products that were not saved, so Finish can be pressed again
+- Inventory: a scan still being looked up when Finish is pressed is waited for and counted, instead of being lost or showing up in the next count
+
 ## 2.14.5
 
 - A barcode scan right after the screen wakes from the screensaver no longer opens "Use soon" (or whichever button had keyboard focus); scans keep working without tapping the screen first
