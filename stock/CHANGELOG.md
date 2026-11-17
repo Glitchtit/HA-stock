@@ -1,3 +1,7 @@
+## 2.14.7
+
+- A newly scanned or quick-added product no longer triggers a second AI run. Storage (0.29.5 or newer) fills in the group, location and shelf life itself when it creates the product, so the "AI is classifying the product…" toasts are gone and each new product costs half the AI calls. The details appear on the next refresh
+
 ## 2.14.6
 
 - Inventory: scanning a multipack barcode (e.g. a 6-pack) counts the whole pack, and the +/- on a counted product steps by that pack size

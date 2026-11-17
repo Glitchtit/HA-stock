@@ -4184,65 +4184,6 @@ export default function App() {
     });
   }, []);
 
-  // Fire HA-Storage's AI optimizer for a single newly-created product. This
-  // is the single-fire path used by both the scan/discover pipeline and the
-  // shopping-list quick-add: after a product first lands in the database we
-  // ask HA-Storage to fill in group / location / unit / parent / best-before /
-  // pack quantity, then refresh `allProducts` so the UI picks up the new
-  // metadata. Non-blocking — the caller does not await it.
-  const triggerAiOptimize = useCallback(
-    (productId) => {
-      if (!productId) return;
-      (async () => {
-        try {
-          const start = await axios.post(
-            `${API_BASE}/ai/optimize`,
-            { product_ids: [productId] },
-            { timeout: 10_000 },
-          );
-          const taskId = start.data?.task_id;
-          if (!taskId) return;
-          addToast('🤖 AI is classifying the product…', 'info');
-          const deadline = Date.now() + 90_000;
-          // eslint-disable-next-line no-await-in-loop
-          while (Date.now() < deadline) {
-            await new Promise((r) => setTimeout(r, 1500));
-            try {
-              const r = await axios.get(
-                `${API_BASE}/ai/optimize/${taskId}`,
-                { timeout: 10_000 },
-              );
-              const status = r.data?.status;
-              if (status === 'done') {
-                try {
-                  const list = await axios.get(`${API_BASE}/products`);
-                  if (Array.isArray(list.data)) setAllProducts(list.data);
-                } catch {
-                  // Non-fatal — UI will pick up on the next poll cycle.
-                }
-                addToast('✅ AI done', 'success');
-                return;
-              }
-              if (status === 'error') {
-                addToast('AI classification failed.', 'error');
-                return;
-              }
-            } catch (err) {
-              if (err?.response?.status === 404) return;
-              // Transient — keep polling.
-            }
-          }
-        } catch (err) {
-          // 409 = full optimize already running; the new product will be
-          // picked up by that run, no action needed.
-          if (err?.response?.status === 409) return;
-          // Anything else: silent — the product already exists.
-        }
-      })();
-    },
-    [addToast],
-  );
-
   // ---- Shopping-list refresh after server-side changes ----------------------
   // Purchases, a finished trip or a bundle push change rows on the server;
   // re-read the list instead of guessing. Non-fatal: the poll catches up.
@@ -4343,7 +4284,6 @@ export default function App() {
       if (result?.success) {
         const name = result?.product?.name ?? barcode;
         const productId = result?.product_id ?? result?.product?.id;
-        const wasNew = !result?.already_existed;
         const extraCount = discoverPendingCountsRef.current[barcode] ?? 0;
         const recentsCount = pendingShoppingRecentsRef.current[barcode] ?? 0;
         delete discoverPendingCountsRef.current[barcode];
@@ -4394,10 +4334,6 @@ export default function App() {
           }
         }
 
-        // Newly-discovered products: ask HA-Storage's AI optimizer to fill in
-        // group / location / unit / parent / etc. Skipped if the barcode
-        // already mapped to an existing product.
-        if (wasNew && productId) triggerAiOptimize(productId);
       } else if (result?.status === 'running') {
         delete discoverPendingCountsRef.current[barcode];
         delete pendingShoppingAddsRef.current[barcode];
@@ -4439,7 +4375,7 @@ export default function App() {
       // Queue drained — refresh stock to show any newly discovered products
       refreshStock();
     }
-  }, [addToast, refreshStock, pushRecent, triggerAiOptimize]);
+  }, [addToast, refreshStock, pushRecent]);
 
   // ---- Barcode scan handler ------------------------------------------------
   // Called for each barcode scan (single or continuous mode).
@@ -5247,10 +5183,9 @@ export default function App() {
       //   - creates the product with name + description
       //   - attaches the barcode
       //   - uploads the picture
-      //   - does NOT add stock and does NOT run AI categorisation
-      // After the product exists we kick off HA-Storage's AI optimizer
-      // (POST /api/storage/ai/optimize) directly — that's the maintained
-      // pipeline (3 phases, streaming logs, single-flight lock).
+      //   - does NOT add stock
+      // HA-Storage then fills in group, location and shelf life on its own
+      // (it enriches every product it creates), so nothing is triggered here.
       // Falls back to a bare-bones direct create if the scraper is offline.
       pendingMutations.current++;
       if (scraperAvailable) {
@@ -5373,10 +5308,6 @@ export default function App() {
         }
 
         await handleAddProductToShoppingList(createdProduct);
-
-        // After the product exists, ask HA-Storage to enrich it (group,
-        // location, unit, parent, best-before, pack quantity, etc.).
-        if (createdProduct?.id) triggerAiOptimize(createdProduct.id);
       } catch (err) {
         addToast(
           err?.response?.data?.detail ?? err?.message ?? 'Failed to add.',
@@ -5386,7 +5317,7 @@ export default function App() {
         pendingMutations.current = Math.max(0, pendingMutations.current - 1);
       }
     },
-    [addToast, handleAddProductToShoppingList, scraperAvailable, triggerAiOptimize],
+    [addToast, handleAddProductToShoppingList, scraperAvailable],
   );
 
   // Lazy create-or-fetch of the "Muistilappu" sentinel product used to back
