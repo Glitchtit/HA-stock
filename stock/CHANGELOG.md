@@ -1,3 +1,7 @@
+## 2.14.9
+
+- Stock no longer adds low-stock products to the shopping list itself; Storage does that after every stock change and every five minutes. Stock counted stock in a different unit (a 1 kg bag of a product counted in grams) as too little, so a row kept appearing and disappearing while the app was open. After consuming from the app, the shopping list is reloaded so a newly low product shows up right away
+
 ## 2.14.8
 
 - Receipt scan: the price printed on each line is recorded as what you paid, instead of the product's web shop price, so spending, stock value and waste use real prices. A discount printed on its own receipt row is not subtracted
