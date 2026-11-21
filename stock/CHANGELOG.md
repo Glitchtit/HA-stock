@@ -1,3 +1,8 @@
+## 2.14.8
+
+- Receipt scan: the price printed on each line is recorded as what you paid, instead of the product's web shop price, so spending, stock value and waste use real prices. A discount printed on its own receipt row is not subtracted
+- Receipt scan: the review sheet shows each line's price
+
 ## 2.14.7
 
 - A newly scanned or quick-added product no longer triggers a second AI run. Storage (0.29.5 or newer) fills in the group, location and shelf life itself when it creates the product, so the "AI is classifying the product…" toasts are gone and each new product costs half the AI calls. The details appear on the next refresh
