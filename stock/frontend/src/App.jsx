@@ -4,6 +4,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { HardwareScanInput } from './components/HardwareScanInput';
 import { groupCount, stockText } from './stockFormat.js';
 import { countsToKeep, inventoryAdjustments, scanUnits } from './inventoryCount.js';
+import { receiptCommitLines } from './receiptCommit.js';
 import ShoppingAttributionModal from './components/ShoppingAttributionModal';
 import ShoppingReconcileModal from './components/ShoppingReconcileModal';
 import WhatsNewModal from './components/WhatsNewModal';
@@ -2795,15 +2796,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
 
   const handleCommit = useCallback(async () => {
     if (!parsed) return;
-    const linesToCommit = (parsed.lines || [])
-      .map((line, idx) => ({ line, ov: overrides[idx] }))
-      .filter(({ ov }) => ov && !ov.ignored && ov.productId)
-      .map(({ ov }) => ({
-        product_id: ov.productId,
-        amount: Number(ov.qty) || 1,
-        unit_id: ov.unitId,
-        note: 'receipt',
-      }));
+    const linesToCommit = receiptCommitLines(parsed.lines, overrides);
     if (linesToCommit.length === 0) {
       setError('Select at least one line.');
       return;
@@ -2913,6 +2906,7 @@ function ReceiptModal({ products, onClose, onCommitted, onToast }) {
                         </p>
                         <p className="text-xs text-gray-500 truncate">
                           {line.raw_text}
+                          {line.price > 0 && <> · {Number(line.price).toFixed(2).replace('.', ',')} €</>}
                           {line.confidence > 0 && (
                             <> · {Math.round(line.confidence * 100)}% sure</>
                           )}
