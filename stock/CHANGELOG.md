@@ -1,3 +1,7 @@
+## 2.14.10
+
+- Adding one more of a product with the + button or by swiping right gives it the product's normal best-before date, the same as scanning it, instead of 31 Dec 2999. Such items now show up in Use soon and in Home Assistant's expiring sensors. Items already added with 2999 keep that date until they are used up or edited
+
 ## 2.14.9
 
 - Stock no longer adds low-stock products to the shopping list itself; Storage does that after every stock change and every five minutes. Stock counted stock in a different unit (a 1 kg bag of a product counted in grams) as too little, so a row kept appearing and disappearing while the app was open. After consuming from the app, the shopping list is reloaded so a newly low product shows up right away
