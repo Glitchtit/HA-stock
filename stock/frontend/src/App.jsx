@@ -5770,7 +5770,6 @@ export default function App() {
         await axios.post(`${API_BASE}/stock/add`, {
           product_id: productId,
           amount: 1,
-          best_before_date: '2999-12-31',
         });
       } catch (err) {
         setStockItems((prev) =>
@@ -5964,7 +5963,6 @@ export default function App() {
           await axios.post(`${API_BASE}/stock/add`, {
             product_id: productId,
             amount: 1,
-            best_before_date: '2999-12-31',
           });
         } catch (err) {
           setStockItems((prev) =>
